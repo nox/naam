@@ -1,0 +1,19 @@
+[package]
+name = "naam"
+version = "0.1.0"
+authors = ["Anthony Ramine <nox@nox.paris>"]
+edition = "2018"
+license = "Apache-2.0 OR MIT"
+
+[lib]
+test = false
+
+[dependencies]
+
+[features]
+std = []
+
+[[example]]
+name = "say-it-thrice"
+path = "tests/say-it-thrice.rs"
+required-features = ["std"]
