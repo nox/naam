@@ -2,10 +2,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod cpu;
 pub mod debug_info;
 mod id;
 pub mod tape;
 
+use crate::cpu::{Dispatch, DispatchToken};
 use crate::debug_info::{DebugInfo, Dump, Dumper};
 use crate::id::Id;
 use crate::tape::{AsClearedWriter, UnexpectedEndError, Writer};
@@ -17,31 +19,35 @@ use core::ops::Deref;
 use core::ptr;
 
 /// A compiled program.
-pub struct Program<Env, Tape, In>
+pub struct Program<Cpu, Tape, Env, In>
 where
     In: ?Sized,
 {
+    cpu: Cpu,
     env: Env,
     tape: Tape,
     debug_info: DebugInfo,
     marker: marker<fn(&mut Env, &mut In)>,
 }
 
-impl<Env, Tape, In> Program<Env, Tape, In>
+impl<Cpu, Tape, Env, In> Program<Cpu, Tape, Env, In>
 where
     In: ?Sized,
 {
     pub fn new<Error>(
+        cpu: Cpu,
         mut env: Env,
         mut tape: Tape,
-        build: impl FnOnce(&mut Builder<'_, Env, In>, &mut Env) -> Result<(), Error>,
+        build: impl FnOnce(&mut Builder<'_, Cpu, Env, In>, &mut Env) -> Result<(), Error>,
     ) -> Result<Self, Error>
     where
+        Cpu: Dispatch<Env, In>,
         Tape: AsClearedWriter,
         Error: From<UnexpectedEndError>,
     {
         let mut builder = Builder {
             writer: tape.as_cleared_writer(),
+            cpu,
             debug_info: DebugInfo::default(),
             id: Id::default(),
             marker,
@@ -50,6 +56,7 @@ where
         builder.write(Unreachable)?;
         let debug_info = builder.debug_info;
         Ok(Self {
+            cpu,
             env,
             debug_info,
             tape,
@@ -68,29 +75,31 @@ where
     }
 }
 
-pub struct Builder<'tape, Env, In>
+pub struct Builder<'tape, Cpu, Env, In>
 where
     In: ?Sized,
 {
     writer: &'tape mut dyn Writer,
+    cpu: Cpu,
     debug_info: DebugInfo,
     #[allow(dead_code)]
     id: Id<'tape>,
     marker: marker<fn(&mut Env, &mut In)>,
 }
 
-impl<'tape, Env, In> Builder<'tape, Env, In>
+impl<'tape, Cpu, Env, In> Builder<'tape, Cpu, Env, In>
 where
+    Cpu: Dispatch<Env, In>,
     In: ?Sized,
 {
-    pub fn write<Op>(&mut self, operands: Op) -> Result<(), UnexpectedEndError>
+    pub fn write<Op>(&mut self, op: Op) -> Result<(), UnexpectedEndError>
     where
         Op: Execute<'tape, Env, In>,
         In: 'tape,
     {
         let instruction = Instruction {
-            function: OpaqueFunction::for_op::<Op, _, _>(),
-            operands,
+            token: self.cpu.get_dispatch_token::<Op>(),
+            op,
         };
 
         if mem::align_of_val(&instruction) != mem::size_of::<usize>() {
@@ -131,8 +140,9 @@ where
 
 pub struct Halt;
 
-impl<Env, Tape, In> Program<Env, Tape, In>
+impl<Cpu, Tape, Env, In> Program<Cpu, Tape, Env, In>
 where
+    Cpu: Dispatch<Env, In>,
     Tape: AsRef<[MaybeUninit<usize>]>,
 {
     #[inline(never)]
@@ -144,21 +154,35 @@ where
                 marker: self.marker,
                 id: Id::default(),
             };
-            let mut addr = Addr {
-                instruction: &*(tape.as_ptr() as *const _),
+            let addr = Addr {
+                token: &*(tape.as_ptr() as *const _),
                 id: runner.id,
             };
-            loop {
-                let pc = Pc {
-                    instruction: addr.instruction,
-                    id: addr.id,
-                };
-                match pc.instruction.function.as_dummy()(pc, runner, &mut self.env, input) {
-                    Ok(next) => addr = next,
-                    Err(Halt) => return,
-                }
-            }
+            self.cpu.dispatch(addr, runner, &mut self.env, input)
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Unreachable;
+
+impl<'tape> Dump<'tape> for Unreachable {
+    fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
+        self.fmt(fmt)
+    }
+}
+
+impl<'tape, Env, In> Execute<'tape, Env, In> for Unreachable
+where
+    In: ?Sized,
+{
+    fn execute(
+        _pc: Pc<'tape, Self>,
+        _runner: Runner<'tape, Env, In>,
+        _env: &mut Env,
+        _input: &mut In,
+    ) -> Result<Addr<'tape>, Halt> {
+        panic!("reached unreachable tape")
     }
 }
 
@@ -179,29 +203,38 @@ impl<'tape, Env, In> Runner<'tape, Env, In> {
         unsafe {
             let word = self.tape.get_unchecked(offset.value);
             Addr {
-                instruction: &*(word as *const _ as *const _),
+                token: &*(word as *const _ as *const _),
                 id: offset.id,
             }
         }
     }
 }
 
-impl<'tape, Env, In> Clone for Runner<'tape, Env, In> {
+impl<'tape, Env, In> Clone for Runner<'tape, Env, In>
+where
+    In: ?Sized,
+{
     #[inline(always)]
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<'tape, Env, In> Copy for Runner<'tape, Env, In> {}
+impl<'tape, Env, In> Copy for Runner<'tape, Env, In> where In: ?Sized {}
 
 impl<'tape, Op> Deref for Pc<'tape, Op> {
     type Target = Op;
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
-        &self.instruction.operands
+        &self.instruction.op
     }
+}
+
+#[repr(transparent)]
+pub struct Pc<'tape, Op> {
+    instruction: &'tape Instruction<Op>,
+    id: Id<'tape>,
 }
 
 impl<'tape, Op> Pc<'tape, Op> {
@@ -209,7 +242,7 @@ impl<'tape, Op> Pc<'tape, Op> {
     pub fn current(self) -> Addr<'tape> {
         unsafe {
             Addr {
-                instruction: &*(self.instruction as *const _ as *const _),
+                token: &*(self.instruction as *const _ as *const _),
                 id: self.id,
             }
         }
@@ -220,17 +253,11 @@ impl<'tape, Op> Pc<'tape, Op> {
         unsafe {
             let end = (self.instruction as *const Instruction<Op>).add(1);
             Addr {
-                instruction: &*(end as *const _),
+                token: &*(end as *const _),
                 id: self.id,
             }
         }
     }
-}
-
-#[repr(transparent)]
-pub struct Pc<'tape, Op> {
-    instruction: &'tape Instruction<Op>,
-    id: Id<'tape>,
 }
 
 impl<'tape, Op> Clone for Pc<'tape, Op> {
@@ -242,10 +269,38 @@ impl<'tape, Op> Clone for Pc<'tape, Op> {
 
 impl<'tape, Op> Copy for Pc<'tape, Op> {}
 
+pub struct OpaquePc<'tape>(Pc<'tape, OpaqueOp>);
+
+impl<'tape> OpaquePc<'tape> {
+    #[inline(always)]
+    unsafe fn from_addr(addr: Addr<'tape>) -> Self {
+        Self(Pc {
+            instruction: &*(addr.token as *const _ as *const _),
+            id: addr.id,
+        })
+    }
+
+    #[inline(always)]
+    pub fn token(&self) -> DispatchToken {
+        self.0.instruction.token
+    }
+}
+
+impl Deref for OpaquePc<'_> {
+    type Target = OpaqueOp;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub struct OpaqueOp;
+
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Addr<'tape> {
-    instruction: &'tape Instruction<DummyOp>,
+    token: &'tape DispatchToken,
     id: Id<'tape>,
 }
 
@@ -256,14 +311,16 @@ pub struct Offset<'tape> {
     id: Id<'tape>,
 }
 
-impl<Env, Tape, In> fmt::Debug for Program<Env, Tape, In>
+impl<Cpu, Tape, Env, In> fmt::Debug for Program<Cpu, Tape, Env, In>
 where
+    Cpu: Debug,
     Env: Debug,
     Tape: AsRef<[MaybeUninit<usize>]>,
 {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let dumper = unsafe { Dumper::new(self.tape.as_ref()) };
         fmt.debug_struct("Machine")
+            .field("cpu", &self.cpu)
             .field("env", &self.env)
             .field("tape", &dumper.debug(&self.debug_info))
             .finish()
@@ -273,57 +330,6 @@ where
 #[derive(Clone, Copy)]
 #[repr(C)]
 struct Instruction<Op> {
-    function: OpaqueFunction,
-    operands: Op,
-}
-
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-struct OpaqueFunction(*const ());
-
-impl OpaqueFunction {
-    fn for_op<'tape, Op, Env, In>() -> Self
-    where
-        Op: Execute<'tape, Env, In>,
-        In: ?Sized,
-    {
-        Self(Op::execute as *const ())
-    }
-
-    #[inline(always)]
-    unsafe fn as_dummy<'tape, Env, In>(
-        self,
-    ) -> fn(
-        Pc<'tape, DummyOp>,
-        Runner<'tape, Env, In>,
-        &mut Env,
-        &mut In,
-    ) -> Result<Addr<'tape>, Halt> {
-        mem::transmute(self.0)
-    }
-}
-
-struct DummyOp;
-
-#[derive(Clone, Copy, Debug)]
-struct Unreachable;
-
-impl<'tape> Dump<'tape> for Unreachable {
-    fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
-        self.fmt(fmt)
-    }
-}
-
-impl<'tape, Env, In> Execute<'tape, Env, In> for Unreachable
-where
-    In: ?Sized,
-{
-    fn execute(
-        _pc: Pc<'tape, Self>,
-        _runner: Runner<'tape, Env, In>,
-        _env: &mut Env,
-        _input: &mut In,
-    ) -> Result<Addr<'tape>, Halt> {
-        panic!("reached unreachable tape")
-    }
+    token: DispatchToken,
+    op: Op,
 }

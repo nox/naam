@@ -2,22 +2,31 @@
 
 extern crate naam;
 
+use naam::cpu::{DirectThreadedCall, Dispatch};
 use naam::debug_info::{Dump, Dumper};
-use naam::{Addr, Execute, Halt, Offset, Pc, Program, Runner};
+use naam::tape::UnexpectedEndError;
+use naam::{Addr, Builder, Execute, Halt, Offset, Pc, Program, Runner};
 use std::fmt::{self, Debug};
 
 fn main() {
     let tape = vec![];
-    let mut program = Program::new(Env(42), tape, |writer, _env| {
-        let print_hello_world = writer.offset();
-        writer.write(PrintLn("Hello, world!"))?;
-        writer.write(JumpNTimes(print_hello_world))?;
-        writer.write(Return(42))
-    })
-    .unwrap();
+    let mut program = Program::new(DirectThreadedCall, Env(42), tape, build).unwrap();
     println!("{:#?}\n", program);
     program.run(&mut 2);
     assert!(program.env().0 == 42);
+}
+
+fn build<Cpu>(
+    builder: &mut Builder<'_, Cpu, Env<usize>, usize>,
+    _env: &mut Env<usize>,
+) -> Result<(), UnexpectedEndError>
+where
+    Cpu: Dispatch<Env<usize>, usize>,
+{
+    let print_hello_world = builder.offset();
+    builder.write(PrintLn("Hello, world!"))?;
+    builder.write(JumpNTimes(print_hello_world))?;
+    builder.write(Return(42))
 }
 
 #[derive(Debug)]

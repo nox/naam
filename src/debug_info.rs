@@ -87,7 +87,7 @@ where
     fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
         fmt::Pointer::fmt(&self, fmt)?;
         fmt.write_str(": ")?;
-        self.operands.dump(fmt, dumper)
+        self.op.dump(fmt, dumper)
     }
 }
 
