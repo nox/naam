@@ -1,8 +1,9 @@
-use crate::cpu::Dispatch;
-use crate::debug_info::DebugInfo;
+use crate::cpu::{Dispatch, DispatchToken};
+use crate::debug_info::{DebugInfo, Dump, Dumper};
 use crate::id::Id;
 use crate::tape::{AsClearedWriter, UnexpectedEndError, Writer};
-use crate::{Execute, Instruction, Offset};
+use crate::{Execute, Offset};
+use core::fmt;
 use core::marker::PhantomData as marker;
 use core::mem;
 use core::ptr;
@@ -40,7 +41,7 @@ where
 
         let size_in_words = mem::size_of_val(&instruction) / mem::size_of::<usize>();
         #[cfg(feature = "std")]
-        let offset = self.writer.offset();
+        let offset = self.writer.word_offset();
         unsafe {
             let slice = self.writer.take(size_in_words)?;
             ptr::write(slice.as_mut_ptr() as *mut _, instruction);
@@ -53,7 +54,7 @@ where
     #[inline(always)]
     pub fn offset(&self) -> Offset<'tape> {
         Offset {
-            value: self.writer.offset(),
+            value: self.writer.word_offset().wrapping_mul(mem::size_of::<usize>()),
             id: Id::default(),
         }
     }
@@ -75,5 +76,23 @@ where
     #[inline(always)]
     pub(crate) unsafe fn into_debug_info(self) -> DebugInfo {
         self.debug_info
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub(crate) struct Instruction<Op> {
+    pub(crate) token: DispatchToken,
+    pub(crate) op: Op,
+}
+
+impl<'tape, Op> Dump<'tape> for Instruction<Op>
+where
+    Op: Dump<'tape>,
+{
+    fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
+        fmt::Pointer::fmt(&self, fmt)?;
+        fmt.write_str(": ")?;
+        self.op.dump(fmt, dumper)
     }
 }

@@ -5,7 +5,7 @@ pub unsafe trait AsClearedWriter: AsRef<[MaybeUninit<usize>]> {
 }
 
 pub unsafe trait Writer {
-    fn offset(&self) -> usize;
+    fn word_offset(&self) -> usize;
     fn take(&mut self, len: usize) -> Result<&mut [MaybeUninit<usize>], UnexpectedEndError>;
 }
 
@@ -24,7 +24,7 @@ unsafe impl AsClearedWriter for Vec<MaybeUninit<usize>> {
 #[cfg(feature = "std")]
 unsafe impl<'tape> Writer for Vec<MaybeUninit<usize>> {
     #[inline(always)]
-    fn offset(&self) -> usize {
+    fn word_offset(&self) -> usize {
         self.len()
     }
 

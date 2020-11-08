@@ -1,5 +1,5 @@
 use crate::id::Id;
-use crate::{Instruction, Offset};
+use crate::Offset;
 
 use core::fmt::{self, Debug};
 use core::mem::{self, MaybeUninit};
@@ -32,9 +32,9 @@ impl<'tape> Dump<'tape> for Offset<'tape> {
     fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
         write!(
             fmt,
-            "[base + {}] /* {:p} */",
-            self.value,
-            dumper.base().wrapping_add(self.value),
+            "{:?} /* {:p} */",
+            self,
+            (dumper.base() as *const u8).wrapping_add(self.value),
         )
     }
 }
@@ -77,17 +77,6 @@ impl DebugInfo {
 
         self.instructions
             .push(DebugInstruction(offset, dump::<I> as *const ()));
-    }
-}
-
-impl<'tape, Op> Dump<'tape> for Instruction<Op>
-where
-    Op: Dump<'tape>,
-{
-    fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
-        fmt::Pointer::fmt(&self, fmt)?;
-        fmt.write_str(": ")?;
-        self.op.dump(fmt, dumper)
     }
 }
 

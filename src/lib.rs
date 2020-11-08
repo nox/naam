@@ -9,16 +9,16 @@ pub mod debug_info;
 mod id;
 pub mod tape;
 
-use crate::builder::Builder;
+use crate::builder::{Builder, Instruction};
 use crate::builtins::Unreachable;
-use crate::cpu::{Addr, Halt, Dispatch, DispatchToken};
+use crate::cpu::{Addr, Halt, Dispatch};
 use crate::debug_info::{DebugInfo, Dump, Dumper};
 use crate::id::Id;
 use crate::tape::{AsClearedWriter, UnexpectedEndError};
 
 use core::fmt::{self, Debug};
 use core::marker::PhantomData as marker;
-use core::mem::MaybeUninit;
+use core::mem::{self, MaybeUninit};
 use core::ops::Deref;
 
 #[derive(Clone, Copy, Debug)]
@@ -51,6 +51,7 @@ impl<Cpu, Tape, Env> Machine<Cpu, Tape, Env> {
             debug_info: unsafe { builder.into_debug_info() },
             tape: self.tape,
             env: self.env,
+            not_sync: marker,
             marker,
         })
     }
@@ -65,6 +66,7 @@ where
     tape: Tape,
     debug_info: DebugInfo,
     env: Env,
+    not_sync: marker<*mut ()>,
     marker: marker<fn(&mut Env, &mut In)>,
 }
 
@@ -131,11 +133,11 @@ where
 impl<'tape, Env, In> Runner<'tape, Env, In> {
     #[inline(always)]
     pub fn resolve_offset(self, offset: Offset<'tape>) -> Addr<'tape> {
-        debug_assert!(offset.value < self.tape.len());
+        debug_assert!(offset.value < self.tape.len().wrapping_mul(mem::size_of::<usize>()));
         unsafe {
-            let word = self.tape.get_unchecked(offset.value);
+            let byte = (self.tape.as_ptr() as *const u8).add(offset.value);
             Addr {
-                token: &*(word as *const _ as *const _),
+                token: &*(byte as *const _),
                 id: offset.id,
             }
         }
@@ -177,11 +179,9 @@ pub struct Pc<'tape, Op> {
 impl<'tape, Op> Pc<'tape, Op> {
     #[inline(always)]
     pub fn current(self) -> Addr<'tape> {
-        unsafe {
-            Addr {
-                token: &*(self.instruction as *const _ as *const _),
-                id: self.id,
-            }
+        Addr {
+            token: &self.instruction.token,
+            id: self.id,
         }
     }
 
@@ -223,6 +223,19 @@ pub struct Offset<'tape> {
     id: Id<'tape>,
 }
 
+impl<'tape> From<Offset<'tape>> for usize {
+    #[inline(always)]
+    fn from(offset: Offset<'tape>) -> usize {
+        offset.value
+    }
+}
+
+impl<'tape> Debug for Offset<'tape> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "[base + {}]", self.value)
+    }
+}
+
 impl<Cpu, Tape, Env, In> fmt::Debug for Program<Cpu, Tape, Env, In>
 where
     Cpu: Debug,
@@ -237,11 +250,4 @@ where
             .field("tape", &dumper.debug(&self.debug_info))
             .finish()
     }
-}
-
-#[derive(Clone, Copy)]
-#[repr(C)]
-struct Instruction<Op> {
-    token: DispatchToken,
-    op: Op,
 }

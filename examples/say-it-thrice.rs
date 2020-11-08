@@ -2,6 +2,7 @@
 
 extern crate naam;
 
+use naam::builtins::Nop;
 use naam::cpu::DirectThreadedLoop as Cpu;
 use naam::{Destination, Execute, Machine, Offset, Pc, Runner};
 use std::fmt::Debug;
@@ -10,6 +11,7 @@ fn main() {
     let machine = Machine::new(Cpu, vec![], 0);
     let mut program = machine
         .program(|builder, _env| {
+            builder.emit(Nop)?;
             let print_hello_world = builder.offset();
             builder.emit(PrintLn("Hello, world!"))?;
             builder.emit(JumpNTimes(print_hello_world))?;
