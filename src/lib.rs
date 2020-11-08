@@ -2,11 +2,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod builtins;
 pub mod cpu;
 pub mod debug_info;
 mod id;
 pub mod tape;
 
+use crate::builtins::Unreachable;
 use crate::cpu::{Dispatch, DispatchToken};
 use crate::debug_info::{DebugInfo, Dump, Dumper};
 use crate::id::Id;
@@ -160,29 +162,6 @@ where
             };
             self.cpu.dispatch(addr, runner, &mut self.env, input)
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Unreachable;
-
-impl<'tape> Dump<'tape> for Unreachable {
-    fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
-        self.fmt(fmt)
-    }
-}
-
-impl<'tape, Env, In> Execute<'tape, Env, In> for Unreachable
-where
-    In: ?Sized,
-{
-    fn execute(
-        _pc: Pc<'tape, Self>,
-        _runner: Runner<'tape, Env, In>,
-        _env: &mut Env,
-        _input: &mut In,
-    ) -> Result<Addr<'tape>, Halt> {
-        panic!("reached unreachable tape")
     }
 }
 
