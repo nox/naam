@@ -1,6 +1,5 @@
 use crate::cpu::{Addr, Dispatch};
 use crate::debug_info::{DebugInfo, Dumper};
-use crate::id::Id;
 use crate::Runner;
 use core::fmt::{self, Debug};
 use core::marker::PhantomData as marker;
@@ -31,11 +30,7 @@ where
     {
         let tape = self.tape.as_ref();
         unsafe {
-            let runner = Runner {
-                tape,
-                marker: self.marker,
-                id: Id::default(),
-            };
+            let runner = Runner::new(tape);
             let addr = Addr {
                 token: &*(tape.as_ptr() as *const _),
                 id: runner.id,

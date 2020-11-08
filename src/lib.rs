@@ -93,6 +93,17 @@ impl<'tape, Ram, Env> Runner<'tape, Ram, Env> {
     pub fn halt(self) -> Halt<'tape> {
         Halt { id: self.id }
     }
+
+    #[inline(always)]
+    fn new(tape: &'tape [MaybeUninit<usize>]) -> Self {
+        Self {
+            tape: tape.as_ptr() as *const u8,
+            #[cfg(debug_assertions)]
+            len: tape.len().wrapping_mul(mem::size_of::<usize>()),
+            marker,
+            id: Id::default(),
+        }
+    }
 }
 
 impl<'tape, Ram, Env> Clone for Runner<'tape, Ram, Env>
