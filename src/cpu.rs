@@ -1,4 +1,4 @@
-use crate::{Addr, Execute, Halt, OpaquePc, Pc, Runner};
+use crate::{Addr, Execute, Halt, OpaquePc, Runner};
 
 use core::mem;
 
@@ -91,7 +91,7 @@ where
         Op: Execute<'tape, Env, In>,
     {
         unsafe fn exec<'tape, Op, Env, In>(
-            pc: Pc<'tape, Op>,
+            pc: OpaquePc<'tape>,
             runner: Runner<'tape, Env, In>,
             env: &mut Env,
             input: &mut In,
@@ -99,7 +99,7 @@ where
             Op: Execute<'tape, Env, In>,
             In: ?Sized,
         {
-            match Op::execute(pc, runner, env, input) {
+            match Op::execute(pc.to_concrete::<Op, Env, In>(), runner, env, input) {
                 Ok(addr) => DirectThreadedCall.dispatch(addr, runner, env, input),
                 Err(Halt) => (),
             }

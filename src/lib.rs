@@ -269,6 +269,7 @@ impl<'tape, Op> Clone for Pc<'tape, Op> {
 
 impl<'tape, Op> Copy for Pc<'tape, Op> {}
 
+#[derive(Clone, Copy)]
 pub struct OpaquePc<'tape>(Pc<'tape, OpaqueOp>);
 
 impl<'tape> OpaquePc<'tape> {
@@ -281,7 +282,18 @@ impl<'tape> OpaquePc<'tape> {
     }
 
     #[inline(always)]
-    pub fn token(&self) -> DispatchToken {
+    pub unsafe fn to_concrete<Op, Env, In>(self) -> Pc<'tape, Op>
+    where
+        In: ?Sized,
+    {
+        Pc {
+            instruction: &*(self.0.instruction as *const _ as *const _),
+            id: self.0.id,
+        }
+    }
+
+    #[inline(always)]
+    pub fn token(self) -> DispatchToken {
         self.0.instruction.token
     }
 }
