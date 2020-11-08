@@ -298,16 +298,7 @@ impl<'tape> OpaquePc<'tape> {
     }
 }
 
-impl Deref for OpaquePc<'_> {
-    type Target = OpaqueOp;
-
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-pub struct OpaqueOp;
+struct OpaqueOp;
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
