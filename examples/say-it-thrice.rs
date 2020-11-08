@@ -3,13 +3,12 @@
 extern crate naam;
 
 use naam::cpu::DirectThreadedLoop as Cpu;
-use naam::debug_info::{Dump, Dumper};
 use naam::{Addr, Execute, Halt, Machine, Offset, Pc, Runner};
 use std::any;
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 
 fn main() {
-    let machine = Machine::new(Cpu, vec![], Env(42));
+    let machine = Machine::new(Cpu, vec![], 0);
     let mut program = machine
         .program(|builder, _env| {
             let print_hello_world = builder.offset();
@@ -20,27 +19,23 @@ fn main() {
         .unwrap();
     println!("{:#?}\n", program);
     program.run(&mut 2);
-    assert!(program.env().0 == 42);
+    assert!(*program.env() == 42);
 }
 
-#[derive(Debug)]
-struct Env<Out>(Out);
-
 #[derive(Clone, Copy, Debug)]
-#[repr(transparent)]
 struct Return<Out>(Out);
 
-impl<'tape, In, Out> Execute<'tape, Env<Out>, In> for Return<Out>
+impl<'tape, In, Out> Execute<'tape, Out, In> for Return<Out>
 where
     Out: 'tape + Copy + Debug,
 {
     fn execute(
         pc: Pc<'tape, Self>,
-        _runner: Runner<'tape, Env<Out>, In>,
-        env: &mut Env<Out>,
+        _runner: Runner<'tape, Out, In>,
+        env: &mut Out,
         _input: &mut In,
     ) -> Result<Addr<'tape>, Halt> {
-        env.0 = pc.0;
+        *env = pc.0;
         Err(Halt)
     }
 }
@@ -82,28 +77,32 @@ impl<'tape, Env> Execute<'tape, Env, usize> for JumpNTimes<'tape> {
     }
 }
 
-// This is code that should be derived, not written by hand.
+mod should_be_derived {
+    use super::*;
+    use naam::debug_info::{Dump, Dumper};
+    use std::fmt::{self, Debug};
 
-impl<'tape, Out> Dump<'tape> for Return<Out>
-where
-    Out: Debug,
-{
-    fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
-        write!(fmt, "Return<{}", any::type_name::<Out>())?;
-        fmt.debug_tuple(">").field(&self.0).finish()
+    impl<'tape, Out> Dump<'tape> for Return<Out>
+    where
+        Out: Debug,
+    {
+        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
+            write!(fmt, "Return<{}", any::type_name::<Out>())?;
+            fmt.debug_tuple(">").field(&self.0).finish()
+        }
     }
-}
 
-impl<'tape> Dump<'tape> for PrintLn {
-    fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
-        self.fmt(fmt)
+    impl<'tape> Dump<'tape> for PrintLn {
+        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
+            self.fmt(fmt)
+        }
     }
-}
 
-impl<'tape> Dump<'tape> for JumpNTimes<'tape> {
-    fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
-        fmt.debug_tuple("JumpNTimes")
-            .field(&dumper.debug(&self.0))
-            .finish()
+    impl<'tape> Dump<'tape> for JumpNTimes<'tape> {
+        fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
+            fmt.debug_tuple("JumpNTimes")
+                .field(&dumper.debug(&self.0))
+                .finish()
+        }
     }
 }
