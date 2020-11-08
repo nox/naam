@@ -1,16 +1,22 @@
+use crate::builtins;
 use crate::id::Id;
 use crate::{Destination, Execute, Pc, Runner};
-use core::mem;
 use core::fmt;
+use core::mem;
 
-pub trait Dispatch<Env, In>: Copy
+pub trait GetDispatchToken<'tape, Op, Env, In>: Copy
 where
+    Op: Execute<'tape, Env, In>,
     In: ?Sized,
 {
-    fn get_dispatch_token<'tape, Op>(self) -> DispatchToken
-    where
-        Op: Execute<'tape, Env, In>;
+    fn get_dispatch_token(self) -> DispatchToken;
+}
 
+pub trait Dispatch<Env, In>: Copy + for<'tape> Unreachable<'tape, Env, In>
+where
+    for<'tape> Self: GetDispatchToken<'tape, <Self as Unreachable<'tape, Env, In>>::Op, Env, In>,
+    In: ?Sized,
+{
     unsafe fn dispatch<'tape>(
         self,
         addr: Addr<'tape>,
@@ -18,6 +24,15 @@ where
         env: &mut Env,
         input: &mut In,
     );
+}
+
+pub unsafe trait Unreachable<'tape, Env, In>
+where
+    In: ?Sized,
+{
+    type Op: Execute<'tape, Env, In>;
+
+    fn unreachable(&self) -> Self::Op;
 }
 
 #[derive(Clone, Copy)]
@@ -66,15 +81,13 @@ impl fmt::Debug for Halt<'_> {
 #[derive(Clone, Copy, Debug)]
 pub struct DirectThreadedLoop;
 
-impl<Env, In> Dispatch<Env, In> for DirectThreadedLoop
+impl<'tape, Op, Env, In> GetDispatchToken<'tape, Op, Env, In> for DirectThreadedLoop
 where
+    Op: Execute<'tape, Env, In>,
     In: ?Sized,
 {
     #[inline(always)]
-    fn get_dispatch_token<'tape, Op>(self) -> DispatchToken
-    where
-        Op: Execute<'tape, Env, In>,
-    {
+    fn get_dispatch_token(self) -> DispatchToken {
         unsafe fn exec<'tape, Op, Env, In>(
             addr: Addr<'tape>,
             runner: Runner<'tape, Env, In>,
@@ -92,7 +105,12 @@ where
             exec::<Op, Env, In> as OpaqueExec<'tape, Env, In, Destination<'tape>> as usize,
         )
     }
+}
 
+impl<Env, In> Dispatch<Env, In> for DirectThreadedLoop
+where
+    In: ?Sized,
+{
     #[inline(always)]
     unsafe fn dispatch<'tape>(
         self,
@@ -102,10 +120,9 @@ where
         input: &mut In,
     ) {
         loop {
-            let function = mem::transmute::<
-                usize,
-                OpaqueExec<'tape, Env, In, Destination<'tape>>,
-            >(addr.token().into());
+            let function = mem::transmute::<usize, OpaqueExec<'tape, Env, In, Destination<'tape>>>(
+                addr.token().into(),
+            );
             match function(addr, runner, env, input) {
                 Ok(next) => addr = next,
                 Err(_) => return,
@@ -114,18 +131,28 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct DirectThreadedCall;
-
-impl<Env, In> Dispatch<Env, In> for DirectThreadedCall
+unsafe impl<'tape, Env, In> Unreachable<'tape, Env, In> for DirectThreadedLoop
 where
     In: ?Sized,
 {
+    type Op = builtins::Unreachable;
+
     #[inline(always)]
-    fn get_dispatch_token<'tape, Op>(self) -> DispatchToken
-    where
-        Op: Execute<'tape, Env, In>,
-    {
+    fn unreachable(&self) -> Self::Op {
+        builtins::Unreachable
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DirectThreadedCall;
+
+impl<'tape, Op, Env, In> GetDispatchToken<'tape, Op, Env, In> for DirectThreadedCall
+where
+    Op: Execute<'tape, Env, In>,
+    In: ?Sized,
+{
+    #[inline(always)]
+    fn get_dispatch_token(self) -> DispatchToken {
         unsafe fn exec<'tape, Op, Env, In>(
             addr: Addr<'tape>,
             runner: Runner<'tape, Env, In>,
@@ -143,7 +170,12 @@ where
 
         DispatchToken::from(exec::<Op, Env, In> as OpaqueExec<'tape, Env, In, ()> as usize)
     }
+}
 
+impl<Env, In> Dispatch<Env, In> for DirectThreadedCall
+where
+    In: ?Sized,
+{
     #[inline(always)]
     unsafe fn dispatch<'tape>(
         self,
@@ -154,6 +186,18 @@ where
     ) {
         let function = mem::transmute::<usize, OpaqueExec<'tape, Env, In, ()>>(addr.token().into());
         function(addr, runner, env, input)
+    }
+}
+
+unsafe impl<'tape, Env, In> Unreachable<'tape, Env, In> for DirectThreadedCall
+where
+    In: ?Sized,
+{
+    type Op = builtins::Unreachable;
+
+    #[inline(always)]
+    fn unreachable(&self) -> Self::Op {
+        builtins::Unreachable
     }
 }
 

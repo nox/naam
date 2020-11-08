@@ -1,4 +1,4 @@
-use crate::cpu::{Dispatch, DispatchToken};
+use crate::cpu::{Dispatch, DispatchToken, GetDispatchToken};
 use crate::debug_info::{DebugInfo, Dump, Dumper};
 use crate::id::Id;
 use crate::tape::{AsClearedWriter, UnexpectedEndError, Writer};
@@ -27,11 +27,12 @@ where
 {
     pub fn emit<Op>(&mut self, op: Op) -> Result<(), UnexpectedEndError>
     where
+        Cpu: GetDispatchToken<'tape, Op, Env, In>,
         Op: Execute<'tape, Env, In>,
         In: 'tape,
     {
         let instruction = Instruction {
-            token: self.cpu.get_dispatch_token::<Op>(),
+            token: <Cpu as GetDispatchToken<Op, Env, In>>::get_dispatch_token(self.cpu),
             op,
         };
 
@@ -54,7 +55,10 @@ where
     #[inline(always)]
     pub fn offset(&self) -> Offset<'tape> {
         Offset {
-            value: self.writer.word_offset().wrapping_mul(mem::size_of::<usize>()),
+            value: self
+                .writer
+                .word_offset()
+                .wrapping_mul(mem::size_of::<usize>()),
             id: Id::default(),
         }
     }
