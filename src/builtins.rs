@@ -1,5 +1,5 @@
 use crate::debug_info::{Dump, Dumper};
-use crate::{Addr, Halt, Execute, Pc, Runner};
+use crate::{Destination, Execute, Pc, Runner};
 
 use core::fmt;
 
@@ -21,7 +21,7 @@ where
         _runner: Runner<'tape, Env, In>,
         _env: &mut Env,
         _input: &mut In,
-    ) -> Result<Addr<'tape>, Halt> {
+    ) -> Destination<'tape> {
         panic!("reached unreachable tape")
     }
 }

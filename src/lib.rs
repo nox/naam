@@ -149,10 +149,8 @@ where
         runner: Runner<'tape, Env, In>,
         env: &mut Env,
         input: &mut In,
-    ) -> Result<Addr<'tape>, Halt>;
+    ) -> Destination<'tape>;
 }
-
-pub struct Halt;
 
 impl<Cpu, Tape, Env, In> Program<Cpu, Tape, Env, In>
 where
@@ -189,7 +187,7 @@ where
 
 impl<'tape, Env, In> Runner<'tape, Env, In> {
     #[inline(always)]
-    pub fn resolve_offset(&self, offset: Offset<'tape>) -> Addr<'tape> {
+    pub fn resolve_offset(self, offset: Offset<'tape>) -> Addr<'tape> {
         debug_assert!(offset.value < self.tape.len());
         unsafe {
             let word = self.tape.get_unchecked(offset.value);
@@ -198,6 +196,11 @@ impl<'tape, Env, In> Runner<'tape, Env, In> {
                 id: offset.id,
             }
         }
+    }
+
+    #[inline(always)]
+    pub fn halt(self) -> Halt<'tape> {
+        Halt { id: self.id }
     }
 }
 
@@ -268,6 +271,8 @@ impl<'tape, Op> Clone for Pc<'tape, Op> {
 
 impl<'tape, Op> Copy for Pc<'tape, Op> {}
 
+pub type Destination<'tape> = Result<Addr<'tape>, Halt<'tape>>;
+
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Addr<'tape> {
@@ -277,8 +282,20 @@ pub struct Addr<'tape> {
 
 impl<'tape> Addr<'tape> {
     #[inline(always)]
-    fn token(self) -> DispatchToken {
+    pub fn token(self) -> DispatchToken {
         *self.token
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Halt<'tape> {
+    #[allow(dead_code)]
+    id: Id<'tape>,
+}
+
+impl fmt::Debug for Halt<'_> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Halt")
     }
 }
 

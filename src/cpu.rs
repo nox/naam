@@ -1,4 +1,4 @@
-use crate::{Addr, Execute, Halt, Pc, Runner};
+use crate::{Addr, Destination, Execute, Pc, Runner};
 
 use core::mem;
 
@@ -53,7 +53,7 @@ where
             runner: Runner<'tape, Env, In>,
             env: &mut Env,
             input: &mut In,
-        ) -> Result<Addr<'tape>, Halt>
+        ) -> Destination<'tape>
         where
             Op: Execute<'tape, Env, In>,
             In: ?Sized,
@@ -62,7 +62,7 @@ where
         }
 
         DispatchToken::from(
-            exec::<Op, Env, In> as OpaqueExec<'tape, Env, In, Result<Addr<'tape>, Halt>> as usize,
+            exec::<Op, Env, In> as OpaqueExec<'tape, Env, In, Destination<'tape>> as usize,
         )
     }
 
@@ -77,11 +77,11 @@ where
         loop {
             let function = mem::transmute::<
                 usize,
-                OpaqueExec<'tape, Env, In, Result<Addr<'tape>, Halt>>,
+                OpaqueExec<'tape, Env, In, Destination<'tape>>,
             >(addr.token().into());
             match function(addr, runner, env, input) {
                 Ok(next) => addr = next,
-                Err(Halt) => return,
+                Err(_) => return,
             }
         }
     }
@@ -110,7 +110,7 @@ where
         {
             match Op::execute(Pc::from_addr(addr), runner, env, input) {
                 Ok(addr) => DirectThreadedCall.dispatch(addr, runner, env, input),
-                Err(Halt) => (),
+                Err(_) => (),
             }
         }
 

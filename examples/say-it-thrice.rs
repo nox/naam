@@ -3,7 +3,7 @@
 extern crate naam;
 
 use naam::cpu::DirectThreadedLoop as Cpu;
-use naam::{Addr, Execute, Halt, Machine, Offset, Pc, Runner};
+use naam::{Execute, Destination, Machine, Offset, Pc, Runner};
 use std::any;
 use std::fmt::Debug;
 
@@ -31,12 +31,12 @@ where
 {
     fn execute(
         pc: Pc<'tape, Self>,
-        _runner: Runner<'tape, Out, In>,
+        runner: Runner<'tape, Out, In>,
         env: &mut Out,
         _input: &mut In,
-    ) -> Result<Addr<'tape>, Halt> {
+    ) -> Destination<'tape> {
         *env = pc.0;
-        Err(Halt)
+        Err(runner.halt())
     }
 }
 
@@ -51,7 +51,7 @@ impl<'tape, Env, In> Execute<'tape, Env, In> for PrintLn {
         _runner: Runner<'tape, Env, In>,
         _env: &mut Env,
         _in: &mut In,
-    ) -> Result<Addr<'tape>, Halt> {
+    ) -> Destination<'tape> {
         println!("{}", pc.0);
         Ok(pc.next())
     }
@@ -67,7 +67,7 @@ impl<'tape, Env> Execute<'tape, Env, usize> for JumpNTimes<'tape> {
         runner: Runner<'tape, Env, usize>,
         _env: &mut Env,
         input: &mut usize,
-    ) -> Result<Addr<'tape>, Halt> {
+    ) -> Destination<'tape> {
         Ok(if *input > 0 {
             *input -= 1;
             runner.resolve_offset(pc.0)
