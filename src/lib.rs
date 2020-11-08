@@ -50,7 +50,7 @@ impl<Cpu, Tape, Env> Machine<Cpu, Tape, Env> {
             marker,
         };
         build(&mut builder, &mut self.env)?;
-        builder.write(Unreachable)?;
+        builder.emit(Unreachable)?;
         let debug_info = builder.debug_info;
         Ok(Program {
             cpu: self.cpu,
@@ -106,7 +106,7 @@ where
     Cpu: Dispatch<Env, In>,
     In: ?Sized,
 {
-    pub fn write<Op>(&mut self, op: Op) -> Result<(), UnexpectedEndError>
+    pub fn emit<Op>(&mut self, op: Op) -> Result<(), UnexpectedEndError>
     where
         Op: Execute<'tape, Env, In>,
         In: 'tape,

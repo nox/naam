@@ -11,9 +11,9 @@ fn main() {
     let mut program = machine
         .program(|builder, _env| {
             let print_hello_world = builder.offset();
-            builder.write(PrintLn("Hello, world!"))?;
-            builder.write(JumpNTimes(print_hello_world))?;
-            builder.write(Return(42))
+            builder.emit(PrintLn("Hello, world!"))?;
+            builder.emit(JumpNTimes(print_hello_world))?;
+            builder.emit(Return(42))
         })
         .unwrap();
     println!("{:#?}\n", program);
