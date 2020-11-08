@@ -6,6 +6,7 @@ use naam::cpu::{DirectThreadedCall, Dispatch};
 use naam::debug_info::{Dump, Dumper};
 use naam::tape::UnexpectedEndError;
 use naam::{Addr, Builder, Execute, Halt, Offset, Pc, Program, Runner};
+use std::any;
 use std::fmt::{self, Debug};
 
 fn main() {
@@ -95,7 +96,8 @@ where
     Out: Debug,
 {
     fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
-        self.fmt(fmt)
+        write!(fmt, "Return<{}", any::type_name::<Out>())?;
+        fmt.debug_tuple(">").field(&self.0).finish()
     }
 }
 
