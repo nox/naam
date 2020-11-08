@@ -36,7 +36,7 @@ where
             op,
         };
 
-        if mem::align_of_val(&instruction) != mem::size_of::<usize>() {
+        if mem::align_of::<Instruction<Op>>() != mem::size_of::<usize>() {
             panic!("instruction is over-aligned");
         }
 
