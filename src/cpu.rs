@@ -1,6 +1,7 @@
-use crate::{Addr, Destination, Execute, Pc, Runner};
-
+use crate::id::Id;
+use crate::{Destination, Execute, Pc, Runner};
 use core::mem;
+use core::fmt;
 
 pub trait Dispatch<Env, In>: Copy
 where
@@ -33,6 +34,32 @@ impl From<DispatchToken> for usize {
     #[inline(always)]
     fn from(token: DispatchToken) -> Self {
         token.0
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct Addr<'tape> {
+    pub(crate) token: &'tape DispatchToken,
+    pub(crate) id: Id<'tape>,
+}
+
+impl<'tape> Addr<'tape> {
+    #[inline(always)]
+    pub fn token(self) -> DispatchToken {
+        *self.token
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Halt<'tape> {
+    #[allow(dead_code)]
+    pub(crate) id: Id<'tape>,
+}
+
+impl fmt::Debug for Halt<'_> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Halt")
     }
 }
 

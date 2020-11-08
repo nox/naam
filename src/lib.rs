@@ -11,7 +11,7 @@ pub mod tape;
 
 use crate::builder::Builder;
 use crate::builtins::Unreachable;
-use crate::cpu::{Dispatch, DispatchToken};
+use crate::cpu::{Addr, Halt, Dispatch, DispatchToken};
 use crate::debug_info::{DebugInfo, Dump, Dumper};
 use crate::id::Id;
 use crate::tape::{AsClearedWriter, UnexpectedEndError};
@@ -215,32 +215,6 @@ impl<'tape, Op> Clone for Pc<'tape, Op> {
 impl<'tape, Op> Copy for Pc<'tape, Op> {}
 
 pub type Destination<'tape> = Result<Addr<'tape>, Halt<'tape>>;
-
-#[derive(Clone, Copy)]
-#[repr(transparent)]
-pub struct Addr<'tape> {
-    token: &'tape DispatchToken,
-    id: Id<'tape>,
-}
-
-impl<'tape> Addr<'tape> {
-    #[inline(always)]
-    pub fn token(self) -> DispatchToken {
-        *self.token
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Halt<'tape> {
-    #[allow(dead_code)]
-    id: Id<'tape>,
-}
-
-impl fmt::Debug for Halt<'_> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str("Halt")
-    }
-}
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
