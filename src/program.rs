@@ -77,8 +77,8 @@ where
         let dumper = unsafe { Dumper::new(self.tape.as_ref()) };
         fmt.debug_struct("Machine")
             .field("cpu", &self.cpu)
-            .field("env", &self.env)
             .field("tape", &dumper.debug(&self.debug_info))
+            .field("env", &self.env)
             .finish()
     }
 }
