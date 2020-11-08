@@ -2,23 +2,24 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod builder;
 pub mod builtins;
 pub mod cpu;
 pub mod debug_info;
 mod id;
 pub mod tape;
 
+use crate::builder::Builder;
 use crate::builtins::Unreachable;
 use crate::cpu::{Dispatch, DispatchToken};
 use crate::debug_info::{DebugInfo, Dump, Dumper};
 use crate::id::Id;
-use crate::tape::{AsClearedWriter, UnexpectedEndError, Writer};
+use crate::tape::{AsClearedWriter, UnexpectedEndError};
 
 use core::fmt::{self, Debug};
 use core::marker::PhantomData as marker;
-use core::mem::{self, MaybeUninit};
+use core::mem::MaybeUninit;
 use core::ops::Deref;
-use core::ptr;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Machine<Cpu, Tape, Env> {
@@ -42,19 +43,12 @@ impl<Cpu, Tape, Env> Machine<Cpu, Tape, Env> {
         Tape: AsClearedWriter,
         Error: From<UnexpectedEndError>,
     {
-        let mut builder = Builder {
-            writer: self.tape.as_cleared_writer(),
-            cpu: self.cpu,
-            debug_info: DebugInfo::default(),
-            id: Id::default(),
-            marker,
-        };
+        let mut builder = Builder::new(self.cpu, &mut self.tape);
         build(&mut builder, &mut self.env)?;
         builder.emit(Unreachable)?;
-        let debug_info = builder.debug_info;
         Ok(Program {
             cpu: self.cpu,
-            debug_info,
+            debug_info: unsafe { builder.into_debug_info() },
             tape: self.tape,
             env: self.env,
             marker,
@@ -86,57 +80,6 @@ where
     #[inline(always)]
     pub fn env_mut(&mut self) -> &mut Env {
         &mut self.env
-    }
-}
-
-pub struct Builder<'tape, Cpu, Env, In>
-where
-    In: ?Sized,
-{
-    writer: &'tape mut dyn Writer,
-    cpu: Cpu,
-    debug_info: DebugInfo,
-    #[allow(dead_code)]
-    id: Id<'tape>,
-    marker: marker<fn(&mut Env, &mut In)>,
-}
-
-impl<'tape, Cpu, Env, In> Builder<'tape, Cpu, Env, In>
-where
-    Cpu: Dispatch<Env, In>,
-    In: ?Sized,
-{
-    pub fn emit<Op>(&mut self, op: Op) -> Result<(), UnexpectedEndError>
-    where
-        Op: Execute<'tape, Env, In>,
-        In: 'tape,
-    {
-        let instruction = Instruction {
-            token: self.cpu.get_dispatch_token::<Op>(),
-            op,
-        };
-
-        if mem::align_of_val(&instruction) != mem::size_of::<usize>() {
-            panic!("instruction is over-aligned");
-        }
-
-        let size_in_words = mem::size_of_val(&instruction) / mem::size_of::<usize>();
-        #[cfg(feature = "std")]
-        let offset = self.writer.offset();
-        unsafe {
-            let slice = self.writer.take(size_in_words)?;
-            ptr::write(slice.as_mut_ptr() as *mut _, instruction);
-            #[cfg(feature = "std")]
-            self.debug_info.push::<Instruction<Op>>(offset);
-        }
-        Ok(())
-    }
-
-    pub fn offset(&self) -> Offset<'tape> {
-        Offset {
-            value: self.writer.offset(),
-            id: Id::default(),
-        }
     }
 }
 
