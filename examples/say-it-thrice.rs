@@ -3,8 +3,7 @@
 extern crate naam;
 
 use naam::cpu::DirectThreadedLoop as Cpu;
-use naam::{Execute, Destination, Machine, Offset, Pc, Runner};
-use std::any;
+use naam::{Destination, Execute, Machine, Offset, Pc, Runner};
 use std::fmt::Debug;
 
 fn main() {
@@ -79,8 +78,9 @@ impl<'tape, Env> Execute<'tape, Env, usize> for JumpNTimes<'tape> {
 
 mod should_be_derived {
     use super::*;
+    use core::any;
+    use core::fmt::{self, Debug};
     use naam::debug_info::{Dump, Dumper};
-    use std::fmt::{self, Debug};
 
     impl<'tape, Out> Dump<'tape> for Return<Out>
     where
