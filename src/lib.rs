@@ -258,6 +258,14 @@ impl<'tape, Op> Pc<'tape, Op> {
             }
         }
     }
+
+    #[inline(always)]
+    pub unsafe fn from_addr(addr: Addr<'tape>) -> Self {
+        Self {
+            instruction: &*(addr.token as *const _ as *const _),
+            id: addr.id,
+        }
+    }
 }
 
 impl<'tape, Op> Clone for Pc<'tape, Op> {
@@ -270,41 +278,17 @@ impl<'tape, Op> Clone for Pc<'tape, Op> {
 impl<'tape, Op> Copy for Pc<'tape, Op> {}
 
 #[derive(Clone, Copy)]
-pub struct OpaquePc<'tape>(Pc<'tape, OpaqueOp>);
-
-impl<'tape> OpaquePc<'tape> {
-    #[inline(always)]
-    unsafe fn from_addr(addr: Addr<'tape>) -> Self {
-        Self(Pc {
-            instruction: &*(addr.token as *const _ as *const _),
-            id: addr.id,
-        })
-    }
-
-    #[inline(always)]
-    pub unsafe fn to_concrete<Op, Env, In>(self) -> Pc<'tape, Op>
-    where
-        In: ?Sized,
-    {
-        Pc {
-            instruction: &*(self.0.instruction as *const _ as *const _),
-            id: self.0.id,
-        }
-    }
-
-    #[inline(always)]
-    pub fn token(self) -> DispatchToken {
-        self.0.instruction.token
-    }
-}
-
-struct OpaqueOp;
-
-#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Addr<'tape> {
     token: &'tape DispatchToken,
     id: Id<'tape>,
+}
+
+impl<'tape> Addr<'tape> {
+    #[inline(always)]
+    fn token(self) -> DispatchToken {
+        *self.token
+    }
 }
 
 #[derive(Clone, Copy)]

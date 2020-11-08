@@ -1,4 +1,4 @@
-use crate::{Addr, Execute, Halt, OpaquePc, Runner};
+use crate::{Addr, Execute, Halt, Pc, Runner};
 
 use core::mem;
 
@@ -48,7 +48,22 @@ where
     where
         Op: Execute<'tape, Env, In>,
     {
-        DispatchToken::from(Op::execute as *const () as usize)
+        unsafe fn exec<'tape, Op, Env, In>(
+            addr: Addr<'tape>,
+            runner: Runner<'tape, Env, In>,
+            env: &mut Env,
+            input: &mut In,
+        ) -> Result<Addr<'tape>, Halt>
+        where
+            Op: Execute<'tape, Env, In>,
+            In: ?Sized,
+        {
+            Op::execute(Pc::from_addr(addr), runner, env, input)
+        }
+
+        DispatchToken::from(
+            exec::<Op, Env, In> as OpaqueExec<'tape, Env, In, Result<Addr<'tape>, Halt>> as usize,
+        )
     }
 
     #[inline(always)]
@@ -60,17 +75,11 @@ where
         input: &mut In,
     ) {
         loop {
-            let pc = OpaquePc::from_addr(addr);
             let function = mem::transmute::<
                 usize,
-                fn(
-                    OpaquePc<'tape>,
-                    Runner<'tape, Env, In>,
-                    &mut Env,
-                    &mut In,
-                ) -> Result<Addr<'tape>, Halt>,
-            >(pc.token().into());
-            match function(pc, runner, env, input) {
+                OpaqueExec<'tape, Env, In, Result<Addr<'tape>, Halt>>,
+            >(addr.token().into());
+            match function(addr, runner, env, input) {
                 Ok(next) => addr = next,
                 Err(Halt) => return,
             }
@@ -91,7 +100,7 @@ where
         Op: Execute<'tape, Env, In>,
     {
         unsafe fn exec<'tape, Op, Env, In>(
-            pc: OpaquePc<'tape>,
+            addr: Addr<'tape>,
             runner: Runner<'tape, Env, In>,
             env: &mut Env,
             input: &mut In,
@@ -99,13 +108,13 @@ where
             Op: Execute<'tape, Env, In>,
             In: ?Sized,
         {
-            match Op::execute(pc.to_concrete::<Op, Env, In>(), runner, env, input) {
+            match Op::execute(Pc::from_addr(addr), runner, env, input) {
                 Ok(addr) => DirectThreadedCall.dispatch(addr, runner, env, input),
                 Err(Halt) => (),
             }
         }
 
-        DispatchToken::from(exec::<Op, Env, In> as *const () as usize)
+        DispatchToken::from(exec::<Op, Env, In> as OpaqueExec<'tape, Env, In, ()> as usize)
     }
 
     #[inline(always)]
@@ -116,11 +125,10 @@ where
         env: &mut Env,
         input: &mut In,
     ) {
-        let pc = OpaquePc::from_addr(addr);
-        let function = mem::transmute::<
-            usize,
-            fn(OpaquePc<'tape>, Runner<'tape, Env, In>, &mut Env, &mut In),
-        >(pc.token().into());
-        function(pc, runner, env, input)
+        let function = mem::transmute::<usize, OpaqueExec<'tape, Env, In, ()>>(addr.token().into());
+        function(addr, runner, env, input)
     }
 }
+
+type OpaqueExec<'tape, Env, In, Out> =
+    unsafe fn(Addr<'tape>, Runner<'tape, Env, In>, &mut Env, &mut In) -> Out;

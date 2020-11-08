@@ -2,7 +2,7 @@
 
 extern crate naam;
 
-use naam::cpu::{DirectThreadedCall, Dispatch};
+use naam::cpu::{DirectThreadedLoop as Cpu, Dispatch};
 use naam::debug_info::{Dump, Dumper};
 use naam::tape::UnexpectedEndError;
 use naam::{Addr, Builder, Execute, Halt, Offset, Pc, Program, Runner};
@@ -11,7 +11,7 @@ use std::fmt::{self, Debug};
 
 fn main() {
     let tape = vec![];
-    let mut program = Program::new(DirectThreadedCall, Env(42), tape, build).unwrap();
+    let mut program = Program::new(Cpu, Env(42), tape, build).unwrap();
     println!("{:#?}\n", program);
     program.run(&mut 2);
     assert!(program.env().0 == 42);
