@@ -7,13 +7,15 @@ pub mod builtins;
 pub mod cpu;
 pub mod debug_info;
 mod id;
+pub mod program;
 pub mod tape;
 
 use crate::builder::{Builder, Instruction};
 use crate::builtins::Unreachable;
-use crate::cpu::{Addr, Halt, Dispatch};
-use crate::debug_info::{DebugInfo, Dump, Dumper};
+use crate::cpu::{Addr, Dispatch, Halt};
+use crate::debug_info::Dump;
 use crate::id::Id;
+use crate::program::Program;
 use crate::tape::{AsClearedWriter, UnexpectedEndError};
 
 use core::fmt::{self, Debug};
@@ -46,42 +48,10 @@ impl<Cpu, Tape, Env> Machine<Cpu, Tape, Env> {
         let mut builder = Builder::new(self.cpu, &mut self.tape);
         build(&mut builder, &mut self.env)?;
         builder.emit(Unreachable)?;
-        Ok(Program {
-            cpu: self.cpu,
-            debug_info: unsafe { builder.into_debug_info() },
-            tape: self.tape,
-            env: self.env,
-            not_sync: marker,
-            marker,
-        })
-    }
-}
-
-/// A compiled program.
-pub struct Program<Cpu, Tape, Env, In>
-where
-    In: ?Sized,
-{
-    cpu: Cpu,
-    tape: Tape,
-    debug_info: DebugInfo,
-    env: Env,
-    not_sync: marker<*mut ()>,
-    marker: marker<fn(&mut Env, &mut In)>,
-}
-
-impl<Cpu, Tape, Env, In> Program<Cpu, Tape, Env, In>
-where
-    In: ?Sized,
-{
-    #[inline(always)]
-    pub fn env(&self) -> &Env {
-        &self.env
-    }
-
-    #[inline(always)]
-    pub fn env_mut(&mut self) -> &mut Env {
-        &mut self.env
+        unsafe {
+            let debug_info = builder.into_debug_info();
+            Ok(Program::new(self.cpu, self.tape, debug_info, self.env))
+        }
     }
 }
 
@@ -95,29 +65,6 @@ where
         env: &mut Env,
         input: &mut In,
     ) -> Destination<'tape>;
-}
-
-impl<Cpu, Tape, Env, In> Program<Cpu, Tape, Env, In>
-where
-    Cpu: Dispatch<Env, In>,
-    Tape: AsRef<[MaybeUninit<usize>]>,
-{
-    #[inline(never)]
-    pub fn run(&mut self, input: &mut In) {
-        let tape = self.tape.as_ref();
-        unsafe {
-            let runner = Runner {
-                tape,
-                marker: self.marker,
-                id: Id::default(),
-            };
-            let addr = Addr {
-                token: &*(tape.as_ptr() as *const _),
-                id: runner.id,
-            };
-            self.cpu.dispatch(addr, runner, &mut self.env, input)
-        }
-    }
 }
 
 #[repr(transparent)]
@@ -233,21 +180,5 @@ impl<'tape> From<Offset<'tape>> for usize {
 impl<'tape> Debug for Offset<'tape> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "[base + {}]", self.value)
-    }
-}
-
-impl<Cpu, Tape, Env, In> fmt::Debug for Program<Cpu, Tape, Env, In>
-where
-    Cpu: Debug,
-    Env: Debug,
-    Tape: AsRef<[MaybeUninit<usize>]>,
-{
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let dumper = unsafe { Dumper::new(self.tape.as_ref()) };
-        fmt.debug_struct("Machine")
-            .field("cpu", &self.cpu)
-            .field("env", &self.env)
-            .field("tape", &dumper.debug(&self.debug_info))
-            .finish()
     }
 }
