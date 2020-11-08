@@ -4,33 +4,33 @@ use crate::{Destination, Execute, Pc, Runner};
 use core::fmt;
 use core::mem;
 
-pub trait GetDispatchToken<'tape, Op, Env, In>: Copy
+pub trait GetDispatchToken<'tape, Op, Ram, Env>: Copy
 where
-    Op: Execute<'tape, Env, In>,
-    In: ?Sized,
+    Op: Execute<'tape, Ram, Env>,
+    Env: ?Sized,
 {
     fn get_dispatch_token(self) -> DispatchToken;
 }
 
-pub trait Dispatch<Env, In>: Copy + for<'tape> Unreachable<'tape, Env, In>
+pub trait Dispatch<Ram, Env>: Copy + for<'tape> Unreachable<'tape, Ram, Env>
 where
-    for<'tape> Self: GetDispatchToken<'tape, <Self as Unreachable<'tape, Env, In>>::Op, Env, In>,
-    In: ?Sized,
+    for<'tape> Self: GetDispatchToken<'tape, <Self as Unreachable<'tape, Ram, Env>>::Op, Ram, Env>,
+    Env: ?Sized,
 {
     unsafe fn dispatch<'tape>(
         self,
         addr: Addr<'tape>,
-        runner: Runner<'tape, Env, In>,
+        runner: Runner<'tape, Ram, Env>,
+        ram: &mut Ram,
         env: &mut Env,
-        input: &mut In,
     );
 }
 
-pub unsafe trait Unreachable<'tape, Env, In>
+pub unsafe trait Unreachable<'tape, Ram, Env>
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
-    type Op: Execute<'tape, Env, In>;
+    type Op: Execute<'tape, Ram, Env>;
 
     fn unreachable(&self) -> Self::Op;
 }
@@ -81,49 +81,49 @@ impl fmt::Debug for Halt<'_> {
 #[derive(Clone, Copy, Debug)]
 pub struct DirectThreadedLoop;
 
-impl<'tape, Op, Env, In> GetDispatchToken<'tape, Op, Env, In> for DirectThreadedLoop
+impl<'tape, Op, Ram, Env> GetDispatchToken<'tape, Op, Ram, Env> for DirectThreadedLoop
 where
-    Op: Execute<'tape, Env, In>,
-    In: ?Sized,
+    Op: Execute<'tape, Ram, Env>,
+    Env: ?Sized,
 {
     #[inline(always)]
     fn get_dispatch_token(self) -> DispatchToken {
-        unsafe fn exec<'tape, Op, Env, In>(
+        unsafe fn exec<'tape, Op, Ram, Env>(
             addr: Addr<'tape>,
-            runner: Runner<'tape, Env, In>,
+            runner: Runner<'tape, Ram, Env>,
+            ram: &mut Ram,
             env: &mut Env,
-            input: &mut In,
         ) -> Destination<'tape>
         where
-            Op: Execute<'tape, Env, In>,
-            In: ?Sized,
+            Op: Execute<'tape, Ram, Env>,
+            Env: ?Sized,
         {
-            Op::execute(Pc::from_addr(addr), runner, env, input)
+            Op::execute(Pc::from_addr(addr), runner, ram, env)
         }
 
         DispatchToken::from(
-            exec::<Op, Env, In> as OpaqueExec<'tape, Env, In, Destination<'tape>> as usize,
+            exec::<Op, Ram, Env> as OpaqueExec<'tape, Ram, Env, Destination<'tape>> as usize,
         )
     }
 }
 
-impl<Env, In> Dispatch<Env, In> for DirectThreadedLoop
+impl<Ram, Env> Dispatch<Ram, Env> for DirectThreadedLoop
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     #[inline(always)]
     unsafe fn dispatch<'tape>(
         self,
         mut addr: Addr<'tape>,
-        runner: Runner<'tape, Env, In>,
+        runner: Runner<'tape, Ram, Env>,
+        ram: &mut Ram,
         env: &mut Env,
-        input: &mut In,
     ) {
         loop {
-            let function = mem::transmute::<usize, OpaqueExec<'tape, Env, In, Destination<'tape>>>(
+            let function = mem::transmute::<usize, OpaqueExec<'tape, Ram, Env, Destination<'tape>>>(
                 addr.token().into(),
             );
-            match function(addr, runner, env, input) {
+            match function(addr, runner, ram, env) {
                 Ok(next) => addr = next,
                 Err(_) => return,
             }
@@ -131,9 +131,9 @@ where
     }
 }
 
-unsafe impl<'tape, Env, In> Unreachable<'tape, Env, In> for DirectThreadedLoop
+unsafe impl<'tape, Ram, Env> Unreachable<'tape, Ram, Env> for DirectThreadedLoop
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     type Op = builtins::Unreachable;
 
@@ -146,52 +146,52 @@ where
 #[derive(Clone, Copy, Debug)]
 pub struct DirectThreadedCall;
 
-impl<'tape, Op, Env, In> GetDispatchToken<'tape, Op, Env, In> for DirectThreadedCall
+impl<'tape, Op, Ram, Env> GetDispatchToken<'tape, Op, Ram, Env> for DirectThreadedCall
 where
-    Op: Execute<'tape, Env, In>,
-    In: ?Sized,
+    Op: Execute<'tape, Ram, Env>,
+    Env: ?Sized,
 {
     #[inline(always)]
     fn get_dispatch_token(self) -> DispatchToken {
-        unsafe fn exec<'tape, Op, Env, In>(
+        unsafe fn exec<'tape, Op, Ram, Env>(
             addr: Addr<'tape>,
-            runner: Runner<'tape, Env, In>,
+            runner: Runner<'tape, Ram, Env>,
+            ram: &mut Ram,
             env: &mut Env,
-            input: &mut In,
         ) where
-            Op: Execute<'tape, Env, In>,
-            In: ?Sized,
+            Op: Execute<'tape, Ram, Env>,
+            Env: ?Sized,
         {
-            match Op::execute(Pc::from_addr(addr), runner, env, input) {
-                Ok(addr) => DirectThreadedCall.dispatch(addr, runner, env, input),
+            match Op::execute(Pc::from_addr(addr), runner, ram, env) {
+                Ok(addr) => DirectThreadedCall.dispatch(addr, runner, ram, env),
                 Err(_) => (),
             }
         }
 
-        DispatchToken::from(exec::<Op, Env, In> as OpaqueExec<'tape, Env, In, ()> as usize)
+        DispatchToken::from(exec::<Op, Ram, Env> as OpaqueExec<'tape, Ram, Env, ()> as usize)
     }
 }
 
-impl<Env, In> Dispatch<Env, In> for DirectThreadedCall
+impl<Ram, Env> Dispatch<Ram, Env> for DirectThreadedCall
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     #[inline(always)]
     unsafe fn dispatch<'tape>(
         self,
         addr: Addr<'tape>,
-        runner: Runner<'tape, Env, In>,
+        runner: Runner<'tape, Ram, Env>,
+        ram: &mut Ram,
         env: &mut Env,
-        input: &mut In,
     ) {
-        let function = mem::transmute::<usize, OpaqueExec<'tape, Env, In, ()>>(addr.token().into());
-        function(addr, runner, env, input)
+        let function = mem::transmute::<usize, OpaqueExec<'tape, Ram, Env, ()>>(addr.token().into());
+        function(addr, runner, ram, env)
     }
 }
 
-unsafe impl<'tape, Env, In> Unreachable<'tape, Env, In> for DirectThreadedCall
+unsafe impl<'tape, Ram, Env> Unreachable<'tape, Ram, Env> for DirectThreadedCall
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     type Op = builtins::Unreachable;
 
@@ -201,5 +201,5 @@ where
     }
 }
 
-type OpaqueExec<'tape, Env, In, Out> =
-    unsafe fn(Addr<'tape>, Runner<'tape, Env, In>, &mut Env, &mut In) -> Out;
+type OpaqueExec<'tape, Ram, Env, Out> =
+    unsafe fn(Addr<'tape>, Runner<'tape, Ram, Env>, &mut Ram, &mut Env) -> Out;

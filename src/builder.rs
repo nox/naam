@@ -8,31 +8,31 @@ use core::marker::PhantomData as marker;
 use core::mem;
 use core::ptr;
 
-pub struct Builder<'tape, Cpu, Env, In>
+pub struct Builder<'tape, Cpu, Ram, Env>
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     cpu: Cpu,
     writer: &'tape mut dyn Writer,
     debug_info: DebugInfo,
     #[allow(dead_code)]
     id: Id<'tape>,
-    marker: marker<fn(&mut Env, &mut In)>,
+    marker: marker<fn(&mut Ram, &mut Env)>,
 }
 
-impl<'tape, Cpu, Env, In> Builder<'tape, Cpu, Env, In>
+impl<'tape, Cpu, Ram, Env> Builder<'tape, Cpu, Ram, Env>
 where
-    Cpu: Dispatch<Env, In>,
-    In: ?Sized,
+    Cpu: Dispatch<Ram, Env>,
+    Env: ?Sized,
 {
     pub fn emit<Op>(&mut self, op: Op) -> Result<(), UnexpectedEndError>
     where
-        Cpu: GetDispatchToken<'tape, Op, Env, In>,
-        Op: Execute<'tape, Env, In>,
-        In: 'tape,
+        Cpu: GetDispatchToken<'tape, Op, Ram, Env>,
+        Op: Execute<'tape, Ram, Env>,
+        Env: 'tape,
     {
         let instruction = Instruction {
-            token: <Cpu as GetDispatchToken<Op, Env, In>>::get_dispatch_token(self.cpu),
+            token: <Cpu as GetDispatchToken<Op, Ram, Env>>::get_dispatch_token(self.cpu),
             op,
         };
 

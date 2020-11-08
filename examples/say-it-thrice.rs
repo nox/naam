@@ -20,23 +20,23 @@ fn main() {
         .unwrap();
     println!("{:#?}\n", program);
     program.run(&mut 2);
-    assert!(*program.env() == 42);
+    assert!(*program.ram() == 42);
 }
 
 #[derive(Clone, Copy, Debug)]
 struct Return<Out>(Out);
 
-impl<'tape, In, Out> Execute<'tape, Out, In> for Return<Out>
+impl<'tape, Env, Out> Execute<'tape, Out, Env> for Return<Out>
 where
     Out: 'tape + Copy + Debug,
 {
     fn execute(
         pc: Pc<'tape, Self>,
-        runner: Runner<'tape, Out, In>,
-        env: &mut Out,
-        _input: &mut In,
+        runner: Runner<'tape, Out, Env>,
+        ram: &mut Out,
+        _env: &mut Env,
     ) -> Destination<'tape> {
-        *env = pc.0;
+        *ram = pc.0;
         Err(runner.halt())
     }
 }
@@ -45,13 +45,13 @@ where
 #[repr(transparent)]
 struct PrintLn(&'static str);
 
-impl<'tape, Env, In> Execute<'tape, Env, In> for PrintLn {
+impl<'tape, Ram, Env> Execute<'tape, Ram, Env> for PrintLn {
     #[inline(always)]
     fn execute(
         pc: Pc<'tape, Self>,
-        _runner: Runner<'tape, Env, In>,
+        _runner: Runner<'tape, Ram, Env>,
+        _ram: &mut Ram,
         _env: &mut Env,
-        _in: &mut In,
     ) -> Destination<'tape> {
         println!("{}", pc.0);
         Ok(pc.next())
@@ -62,15 +62,15 @@ impl<'tape, Env, In> Execute<'tape, Env, In> for PrintLn {
 #[repr(transparent)]
 struct JumpNTimes<'tape>(Offset<'tape>);
 
-impl<'tape, Env> Execute<'tape, Env, usize> for JumpNTimes<'tape> {
+impl<'tape, Ram> Execute<'tape, Ram, usize> for JumpNTimes<'tape> {
     fn execute(
         pc: Pc<'tape, Self>,
-        runner: Runner<'tape, Env, usize>,
-        _env: &mut Env,
-        input: &mut usize,
+        runner: Runner<'tape, Ram, usize>,
+        _ram: &mut Ram,
+        env: &mut usize,
     ) -> Destination<'tape> {
-        Ok(if *input > 0 {
-            *input -= 1;
+        Ok(if *env > 0 {
+            *env -= 1;
             runner.resolve_offset(pc.0)
         } else {
             pc.next()

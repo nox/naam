@@ -7,26 +7,26 @@ use core::marker::PhantomData as marker;
 use core::mem::MaybeUninit;
 
 /// A compiled program.
-pub struct Program<Cpu, Tape, Env, In>
+pub struct Program<Cpu, Tape, Ram, Env>
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     cpu: Cpu,
     tape: Tape,
     debug_info: DebugInfo,
-    env: Env,
+    ram: Ram,
     not_sync: marker<*mut ()>,
-    marker: marker<fn(&mut Env, &mut In)>,
+    marker: marker<fn(&mut Ram, &mut Env)>,
 }
 
-impl<Cpu, Tape, Env, In> Program<Cpu, Tape, Env, In>
+impl<Cpu, Tape, Ram, Env> Program<Cpu, Tape, Ram, Env>
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     #[inline(never)]
-    pub fn run(&mut self, input: &mut In)
+    pub fn run(&mut self, env: &mut Env)
     where
-        Cpu: Dispatch<Env, In>,
+        Cpu: Dispatch<Ram, Env>,
         Tape: AsRef<[MaybeUninit<usize>]>,
     {
         let tape = self.tape.as_ref();
@@ -40,37 +40,37 @@ where
                 token: &*(tape.as_ptr() as *const _),
                 id: runner.id,
             };
-            self.cpu.dispatch(addr, runner, &mut self.env, input)
+            self.cpu.dispatch(addr, runner, &mut self.ram, env)
         }
     }
 
     #[inline(always)]
-    pub fn env(&self) -> &Env {
-        &self.env
+    pub fn ram(&self) -> &Ram {
+        &self.ram
     }
 
     #[inline(always)]
-    pub fn env_mut(&mut self) -> &mut Env {
-        &mut self.env
+    pub fn env_mut(&mut self) -> &mut Ram {
+        &mut self.ram
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn new(cpu: Cpu, tape: Tape, debug_info: DebugInfo, env: Env) -> Self {
+    pub(crate) unsafe fn new(cpu: Cpu, tape: Tape, debug_info: DebugInfo, ram: Ram) -> Self {
         Self {
             cpu,
             tape,
             debug_info,
-            env,
+            ram,
             not_sync: marker,
             marker,
         }
     }
 }
 
-impl<Cpu, Tape, Env, In> fmt::Debug for Program<Cpu, Tape, Env, In>
+impl<Cpu, Tape, Ram, Env> fmt::Debug for Program<Cpu, Tape, Ram, Env>
 where
     Cpu: Debug,
-    Env: Debug,
+    Ram: Debug,
     Tape: AsRef<[MaybeUninit<usize>]>,
 {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -78,7 +78,7 @@ where
         fmt.debug_struct("Machine")
             .field("cpu", &self.cpu)
             .field("tape", &dumper.debug(&self.debug_info))
-            .field("env", &self.env)
+            .field("ram", &self.ram)
             .finish()
     }
 }

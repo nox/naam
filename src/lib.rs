@@ -23,60 +23,60 @@ use core::mem::{self, MaybeUninit};
 use core::ops::Deref;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Machine<Cpu, Tape, Env> {
+pub struct Machine<Cpu, Tape, Ram> {
     cpu: Cpu,
     tape: Tape,
-    env: Env,
+    ram: Ram,
 }
 
-impl<Cpu, Tape, Env> Machine<Cpu, Tape, Env> {
+impl<Cpu, Tape, Ram> Machine<Cpu, Tape, Ram> {
     #[inline(always)]
-    pub fn new(cpu: Cpu, tape: Tape, env: Env) -> Self {
-        Self { cpu, tape, env }
+    pub fn new(cpu: Cpu, tape: Tape, ram: Ram) -> Self {
+        Self { cpu, tape, ram }
     }
 
-    pub fn program<In, Error>(
+    pub fn program<Env, Error>(
         mut self,
-        build: impl FnOnce(&mut Builder<'_, Cpu, Env, In>, &mut Env) -> Result<(), Error>,
-    ) -> Result<Program<Cpu, Tape, Env, In>, Error>
+        build: impl FnOnce(&mut Builder<'_, Cpu, Ram, Env>, &mut Ram) -> Result<(), Error>,
+    ) -> Result<Program<Cpu, Tape, Ram, Env>, Error>
     where
-        Cpu: Dispatch<Env, In>,
+        Cpu: Dispatch<Ram, Env>,
         Tape: AsClearedWriter,
         Error: From<UnexpectedEndError>,
     {
         let mut builder = Builder::new(self.cpu, &mut self.tape);
-        build(&mut builder, &mut self.env)?;
+        build(&mut builder, &mut self.ram)?;
         builder.emit(self.cpu.unreachable())?;
         unsafe {
             let debug_info = builder.into_debug_info();
-            Ok(Program::new(self.cpu, self.tape, debug_info, self.env))
+            Ok(Program::new(self.cpu, self.tape, debug_info, self.ram))
         }
     }
 }
 
-pub trait Execute<'tape, Env, In>: 'tape + Copy + Dump<'tape> + Sized
+pub trait Execute<'tape, Ram, Env>: 'tape + Copy + Dump<'tape> + Sized
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     fn execute(
         pc: Pc<'tape, Self>,
-        runner: Runner<'tape, Env, In>,
+        runner: Runner<'tape, Ram, Env>,
+        ram: &mut Ram,
         env: &mut Env,
-        input: &mut In,
     ) -> Destination<'tape>;
 }
 
 #[repr(transparent)]
-pub struct Runner<'tape, Env, In>
+pub struct Runner<'tape, Ram, Env>
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     tape: &'tape [MaybeUninit<usize>],
-    marker: marker<fn(&mut Env, &mut In)>,
+    marker: marker<fn(&mut Ram, &mut Env)>,
     id: Id<'tape>,
 }
 
-impl<'tape, Env, In> Runner<'tape, Env, In> {
+impl<'tape, Ram, Env> Runner<'tape, Ram, Env> {
     #[inline(always)]
     pub fn resolve_offset(self, offset: Offset<'tape>) -> Addr<'tape> {
         debug_assert!(offset.value < self.tape.len().wrapping_mul(mem::size_of::<usize>()));
@@ -95,9 +95,9 @@ impl<'tape, Env, In> Runner<'tape, Env, In> {
     }
 }
 
-impl<'tape, Env, In> Clone for Runner<'tape, Env, In>
+impl<'tape, Ram, Env> Clone for Runner<'tape, Ram, Env>
 where
-    In: ?Sized,
+    Env: ?Sized,
 {
     #[inline(always)]
     fn clone(&self) -> Self {
@@ -105,7 +105,7 @@ where
     }
 }
 
-impl<'tape, Env, In> Copy for Runner<'tape, Env, In> where In: ?Sized {}
+impl<'tape, Ram, Env> Copy for Runner<'tape, Ram, Env> where Env: ?Sized {}
 
 impl<'tape, Op> Deref for Pc<'tape, Op> {
     type Target = Op;
