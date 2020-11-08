@@ -2,32 +2,25 @@
 
 extern crate naam;
 
-use naam::cpu::{DirectThreadedLoop as Cpu, Dispatch};
+use naam::cpu::DirectThreadedLoop as Cpu;
 use naam::debug_info::{Dump, Dumper};
-use naam::tape::UnexpectedEndError;
-use naam::{Addr, Builder, Execute, Halt, Offset, Pc, Program, Runner};
+use naam::{Addr, Execute, Halt, Machine, Offset, Pc, Runner};
 use std::any;
 use std::fmt::{self, Debug};
 
 fn main() {
-    let tape = vec![];
-    let mut program = Program::new(Cpu, Env(42), tape, build).unwrap();
+    let machine = Machine::new(Cpu, vec![], Env(42));
+    let mut program = machine
+        .program(|builder, _env| {
+            let print_hello_world = builder.offset();
+            builder.write(PrintLn("Hello, world!"))?;
+            builder.write(JumpNTimes(print_hello_world))?;
+            builder.write(Return(42))
+        })
+        .unwrap();
     println!("{:#?}\n", program);
     program.run(&mut 2);
     assert!(program.env().0 == 42);
-}
-
-fn build<Cpu>(
-    builder: &mut Builder<'_, Cpu, Env<usize>, usize>,
-    _env: &mut Env<usize>,
-) -> Result<(), UnexpectedEndError>
-where
-    Cpu: Dispatch<Env<usize>, usize>,
-{
-    let print_hello_world = builder.offset();
-    builder.write(PrintLn("Hello, world!"))?;
-    builder.write(JumpNTimes(print_hello_world))?;
-    builder.write(Return(42))
 }
 
 #[derive(Debug)]

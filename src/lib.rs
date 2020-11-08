@@ -20,15 +20,57 @@ use core::mem::{self, MaybeUninit};
 use core::ops::Deref;
 use core::ptr;
 
+#[derive(Clone, Copy, Debug)]
+pub struct Machine<Cpu, Tape, Env> {
+    cpu: Cpu,
+    tape: Tape,
+    env: Env,
+}
+
+impl<Cpu, Tape, Env> Machine<Cpu, Tape, Env> {
+    #[inline(always)]
+    pub fn new(cpu: Cpu, tape: Tape, env: Env) -> Self {
+        Self { cpu, tape, env }
+    }
+
+    pub fn program<In, Error>(
+        mut self,
+        build: impl FnOnce(&mut Builder<'_, Cpu, Env, In>, &mut Env) -> Result<(), Error>,
+    ) -> Result<Program<Cpu, Tape, Env, In>, Error>
+    where
+        Cpu: Dispatch<Env, In>,
+        Tape: AsClearedWriter,
+        Error: From<UnexpectedEndError>,
+    {
+        let mut builder = Builder {
+            writer: self.tape.as_cleared_writer(),
+            cpu: self.cpu,
+            debug_info: DebugInfo::default(),
+            id: Id::default(),
+            marker,
+        };
+        build(&mut builder, &mut self.env)?;
+        builder.write(Unreachable)?;
+        let debug_info = builder.debug_info;
+        Ok(Program {
+            cpu: self.cpu,
+            debug_info,
+            tape: self.tape,
+            env: self.env,
+            marker,
+        })
+    }
+}
+
 /// A compiled program.
 pub struct Program<Cpu, Tape, Env, In>
 where
     In: ?Sized,
 {
     cpu: Cpu,
-    env: Env,
     tape: Tape,
     debug_info: DebugInfo,
+    env: Env,
     marker: marker<fn(&mut Env, &mut In)>,
 }
 
@@ -36,36 +78,6 @@ impl<Cpu, Tape, Env, In> Program<Cpu, Tape, Env, In>
 where
     In: ?Sized,
 {
-    pub fn new<Error>(
-        cpu: Cpu,
-        mut env: Env,
-        mut tape: Tape,
-        build: impl FnOnce(&mut Builder<'_, Cpu, Env, In>, &mut Env) -> Result<(), Error>,
-    ) -> Result<Self, Error>
-    where
-        Cpu: Dispatch<Env, In>,
-        Tape: AsClearedWriter,
-        Error: From<UnexpectedEndError>,
-    {
-        let mut builder = Builder {
-            writer: tape.as_cleared_writer(),
-            cpu,
-            debug_info: DebugInfo::default(),
-            id: Id::default(),
-            marker,
-        };
-        build(&mut builder, &mut env)?;
-        builder.write(Unreachable)?;
-        let debug_info = builder.debug_info;
-        Ok(Self {
-            cpu,
-            env,
-            debug_info,
-            tape,
-            marker,
-        })
-    }
-
     #[inline(always)]
     pub fn env(&self) -> &Env {
         &self.env
