@@ -88,20 +88,20 @@ mod should_be_derived {
     where
         Out: Debug,
     {
-        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
+        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
             write!(fmt, "Return<{}", any::type_name::<Out>())?;
             fmt.debug_tuple(">").field(&self.0).finish()
         }
     }
 
     impl<'tape> Dump<'tape> for PrintLn {
-        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
+        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
             self.fmt(fmt)
         }
     }
 
     impl<'tape> Dump<'tape> for JumpNTimes<'tape> {
-        fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
+        fn dump(&self, fmt: &mut fmt::Formatter, dumper: Dumper<'tape>) -> fmt::Result {
             fmt.debug_tuple("JumpNTimes")
                 .field(&dumper.debug(&self.0))
                 .finish()

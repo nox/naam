@@ -14,10 +14,12 @@ pub trait Dump<'tape> {
     /// Dumps a value.
     ///
     /// Use the given dumper to resolve offsets stored in values.
-    fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result;
+    fn dump(&self, fmt: &mut fmt::Formatter, dumper: Dumper<'tape>) -> fmt::Result;
 }
 
 /// A dumper.
+#[derive(Clone, Copy)]
+#[repr(transparent)]
 pub struct Dumper<'tape> {
     tape: *const MaybeUninit<usize>,
     #[allow(dead_code)]
@@ -27,13 +29,13 @@ pub struct Dumper<'tape> {
 impl<'tape> Dumper<'tape> {
     /// Takes a dumpable value and return a bridge that can be passed
     /// to methods expecting values that implement `Debug`.
-    pub fn debug<'a, T: Dump<'tape>>(&'a self, value: &'a T) -> DumpDebugBridge<'a, 'tape, T> {
+    pub fn debug<'a, T: Dump<'tape>>(self, value: &'a T) -> DumpDebugBridge<'a, 'tape, T> {
         DumpDebugBridge(value, self)
     }
 }
 
 /// A bridge to use dumpable values in `Debug`.
-pub struct DumpDebugBridge<'a, 'tape, T>(&'a T, &'a Dumper<'tape>);
+pub struct DumpDebugBridge<'a, 'tape, T>(&'a T, Dumper<'tape>);
 
 impl<'tape, T: Dump<'tape>> Debug for DumpDebugBridge<'_, 'tape, T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -42,7 +44,7 @@ impl<'tape, T: Dump<'tape>> Debug for DumpDebugBridge<'_, 'tape, T> {
 }
 
 impl<'tape> Dump<'tape> for Offset<'tape> {
-    fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
+    fn dump(&self, fmt: &mut fmt::Formatter, dumper: Dumper<'tape>) -> fmt::Result {
         write!(
             fmt,
             "{:?} /* {:p} */",
@@ -80,7 +82,7 @@ impl DebugInfo {
         unsafe fn dump<'tape, I>(
             ptr: *const MaybeUninit<usize>,
             fmt: &mut fmt::Formatter,
-            dumper: &Dumper<'tape>,
+            dumper: Dumper<'tape>,
         ) -> fmt::Result
         where
             I: Dump<'tape>,
@@ -97,16 +99,16 @@ impl<'tape> Dump<'tape> for DebugInfo {
     fn dump(
         &self,
         fmt: &mut fmt::Formatter,
-        #[cfg_attr(not(feature = "std"), allow(unused_variables))] dumper: &Dumper<'tape>,
+        #[cfg_attr(not(feature = "std"), allow(unused_variables))] dumper: Dumper<'tape>,
     ) -> fmt::Result {
         impl<'tape> Dump<'tape> for DebugInstruction {
-            fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
+            fn dump(&self, fmt: &mut fmt::Formatter, dumper: Dumper<'tape>) -> fmt::Result {
                 // This is fine as long as DebugInfo and this type stay private and we
                 // they don't outlive the program they come from.
                 unsafe {
                     let dump = mem::transmute::<
                         _,
-                        unsafe fn(_, &mut fmt::Formatter, &Dumper<'tape>) -> fmt::Result,
+                        unsafe fn(_, &mut fmt::Formatter, Dumper<'tape>) -> fmt::Result,
                     >(self.1);
                     dump(dumper.tape.add(self.0), fmt, dumper)?;
                 }

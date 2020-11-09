@@ -94,7 +94,7 @@ impl<'tape, Op> Dump<'tape> for Instruction<Op>
 where
     Op: Dump<'tape>,
 {
-    fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result {
+    fn dump(&self, fmt: &mut fmt::Formatter, dumper: Dumper<'tape>) -> fmt::Result {
         fmt::Pointer::fmt(&self, fmt)?;
         fmt.write_str(": ")?;
         self.op.dump(fmt, dumper)

@@ -49,13 +49,13 @@ mod should_be_derived {
     use core::fmt;
 
     impl<'tape> Dump<'tape> for Nop {
-        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
+        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
             fmt::Debug::fmt(self, fmt)
         }
     }
 
     impl<'tape> Dump<'tape> for Unreachable {
-        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: &Dumper<'tape>) -> fmt::Result {
+        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
             fmt::Debug::fmt(self, fmt)
         }
     }
