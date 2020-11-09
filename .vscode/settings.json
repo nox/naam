@@ -1,5 +1,7 @@
 {
     "rust-analyzer.cargo.features": [
         "std",
-    ]
+    ],
+    "rust-analyzer.assist.importMergeBehaviour": "none",
+    "rust-analyzer.assist.importPrefix": "by_crate"
 }
