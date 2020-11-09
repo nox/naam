@@ -1,3 +1,5 @@
+//! Programs and how to run them.
+
 use crate::cpu::{Addr, Dispatch};
 use crate::debug_info::{DebugInfo, Dumper};
 use crate::Runner;
@@ -22,7 +24,7 @@ impl<Cpu, Tape, Ram, Env> Program<Cpu, Tape, Ram, Env>
 where
     Env: ?Sized,
 {
-    #[inline(never)]
+    /// Runs the program in a given environment.
     pub fn run(&mut self, env: &mut Env)
     where
         Cpu: Dispatch<Ram, Env>,
@@ -39,11 +41,13 @@ where
         }
     }
 
+    /// Gets a reference to the RAM used by the program.
     #[inline(always)]
     pub fn ram(&self) -> &Ram {
         &self.ram
     }
 
+    /// Gets a mutable reference to the RAM used by the program.
     #[inline(always)]
     pub fn env_mut(&mut self) -> &mut Ram {
         &mut self.ram

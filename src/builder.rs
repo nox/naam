@@ -1,3 +1,5 @@
+//! Building programs.
+
 use crate::cpu::{Dispatch, DispatchToken, GetDispatchToken};
 use crate::debug_info::{DebugInfo, Dump, Dumper};
 use crate::id::Id;
@@ -8,6 +10,7 @@ use core::marker::PhantomData as marker;
 use core::mem;
 use core::ptr;
 
+/// A program builder. Passed to the closure given to `Machine::program`.
 pub struct Builder<'tape, Cpu, Ram, Env>
 where
     Env: ?Sized,
@@ -25,6 +28,11 @@ where
     Cpu: Dispatch<Ram, Env>,
     Env: ?Sized,
 {
+    /// Emits an operation, which must be supported by the builder's CPU.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if `Op`'s alignment exceeds `usize`'s.
     pub fn emit<Op>(&mut self, op: Op) -> Result<(), UnexpectedEndError>
     where
         Cpu: GetDispatchToken<'tape, Op, Ram, Env>,
@@ -52,6 +60,10 @@ where
         Ok(())
     }
 
+    /// Returns the current offset in the tape.
+    ///
+    /// The current offset is the distance between the beginning of the tape
+    /// and the end of the operation that was last written.
     #[inline(always)]
     pub fn offset(&self) -> Offset<'tape> {
         Offset {
