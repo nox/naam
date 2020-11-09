@@ -1,6 +1,6 @@
 //! CPU-related traits and a couple of built-in CPUs.
 
-use crate::builtins;
+use crate::builtins::Unreachable;
 use crate::id::Id;
 use crate::{Destination, Execute, Pc, Runner};
 use core::fmt;
@@ -15,9 +15,9 @@ use core::mem;
 /// It is the CPU's responsibility to ensure the proper progression of the
 /// program through the opaque `DispatchToken` values reachable from the
 /// destinations returned by each operation, .
-pub trait Dispatch<Ram, Env>: Copy + for<'tape> Unreachable<'tape, Ram, Env>
+pub trait Dispatch<Ram, Env>: Copy
 where
-    for<'tape> Self: GetDispatchToken<'tape, <Self as Unreachable<'tape, Ram, Env>>::Op, Ram, Env>,
+    for<'tape> Self: GetDispatchToken<'tape, Unreachable, Ram, Env>,
     Env: ?Sized,
 {
     /// Dispatches the operation at the given address.
@@ -45,18 +45,6 @@ where
     /// This dispatch token can be accessed from the address passed to
     /// `Self::dispatch`.
     fn get_dispatch_token(self) -> DispatchToken;
-}
-
-/// The unreachable operation supported by each CPU.
-pub unsafe trait Unreachable<'tape, Ram, Env>
-where
-    Env: ?Sized,
-{
-    /// The type of the unreachable operation.
-    type Op: Execute<'tape, Ram, Env>;
-
-    /// Returns the unreachable operation.
-    fn unreachable(&self) -> Self::Op;
 }
 
 /// An opaque dispatch token.
@@ -178,18 +166,6 @@ where
     }
 }
 
-unsafe impl<'tape, Ram, Env> Unreachable<'tape, Ram, Env> for DirectThreadedLoop
-where
-    Env: ?Sized,
-{
-    type Op = builtins::Unreachable;
-
-    #[inline(always)]
-    fn unreachable(&self) -> Self::Op {
-        builtins::Unreachable
-    }
-}
-
 /// A CPU that dispatches operations the way a direct-threaded emulator does.
 ///
 /// This CPU supports all instructions.
@@ -243,18 +219,6 @@ where
         let function =
             mem::transmute::<usize, OpaqueExec<'tape, Ram, Env, ()>>(addr.token().into());
         function(addr, runner, ram, env)
-    }
-}
-
-unsafe impl<'tape, Ram, Env> Unreachable<'tape, Ram, Env> for DirectThreadedCall
-where
-    Env: ?Sized,
-{
-    type Op = builtins::Unreachable;
-
-    #[inline(always)]
-    fn unreachable(&self) -> Self::Op {
-        builtins::Unreachable
     }
 }
 

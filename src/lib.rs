@@ -17,6 +17,7 @@ pub mod program;
 pub mod tape;
 
 use crate::builder::{Builder, Instruction};
+use crate::builtins::Unreachable;
 use crate::cpu::{Addr, Dispatch, Halt};
 use crate::debug_info::Dump;
 use crate::id::Id;
@@ -65,7 +66,7 @@ where
     {
         let mut builder = Builder::new(self.cpu, &mut self.tape);
         build(&mut builder, &mut self.ram)?;
-        builder.emit(self.cpu.unreachable())?;
+        builder.emit(Unreachable)?;
         unsafe {
             let debug_info = builder.into_debug_info();
             Ok(Program::new(self.cpu, self.tape, debug_info, self.ram))
