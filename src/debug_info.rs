@@ -1,13 +1,23 @@
+//! Infrastructure to dump programs for debugging purposes.
+
 use crate::id::Id;
 use crate::Offset;
 
 use core::fmt::{self, Debug};
 use core::mem::{self, MaybeUninit};
 
+/// Trait for values that can be dumped.
+///
+/// This is like the `Debug` trait, except it takes a dumper to resolve
+/// offsets when dumping a program.
 pub trait Dump<'tape> {
+    /// Dumps a value.
+    ///
+    /// Use the given dumper to resolve offsets stored in values.
     fn dump(&self, fmt: &mut fmt::Formatter, dumper: &Dumper<'tape>) -> fmt::Result;
 }
 
+/// A dumper.
 pub struct Dumper<'tape> {
     tape: *const MaybeUninit<usize>,
     #[allow(dead_code)]
@@ -15,11 +25,14 @@ pub struct Dumper<'tape> {
 }
 
 impl<'tape> Dumper<'tape> {
+    /// Takes a dumpable value and return a bridge that can be passed
+    /// to methods expecting values that implement `Debug`.
     pub fn debug<'a, T: Dump<'tape>>(&'a self, value: &'a T) -> DumpDebugBridge<'a, 'tape, T> {
         DumpDebugBridge(value, self)
     }
 }
 
+/// A bridge to use dumpable values in `Debug`.
 pub struct DumpDebugBridge<'a, 'tape, T>(&'a T, &'a Dumper<'tape>);
 
 impl<'tape, T: Dump<'tape>> Debug for DumpDebugBridge<'_, 'tape, T> {

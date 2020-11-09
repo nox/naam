@@ -82,6 +82,10 @@ where
     ///
     /// Use the runner to resolve tape offsets stored in the operation, and the
     /// program counter to continue execution to the next operation.
+    ///
+    /// **Note:** As the CPU is the entity responsible for dispatching
+    /// operations and most CPUs wrap calls to that function in a separate
+    /// unsafe function, users should probably mark this method as inline.
     fn execute(
         pc: Pc<'tape, Self>,
         runner: Runner<'tape, Ram, Env>,
