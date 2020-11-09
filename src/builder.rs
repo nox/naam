@@ -49,12 +49,12 @@ where
         }
 
         let size_in_words = mem::size_of_val(&instruction) / mem::size_of::<usize>();
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         let offset = self.writer.word_offset();
         unsafe {
             let slice = self.writer.take(size_in_words)?;
             ptr::write(slice.as_mut_ptr() as *mut _, instruction);
-            #[cfg(feature = "std")]
+            #[cfg(feature = "alloc")]
             self.debug_info.push::<Instruction<Op>>(offset);
         }
         Ok(())

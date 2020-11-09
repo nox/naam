@@ -3,7 +3,10 @@
 //! Highly experimental framework to design higher-level virtual machines
 //! fearlessly.
 
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
 
 pub mod builder;
 pub mod builtins;

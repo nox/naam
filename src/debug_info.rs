@@ -3,6 +3,8 @@
 use crate::id::Id;
 use crate::Offset;
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 use core::fmt::{self, Debug};
 use core::mem::{self, MaybeUninit};
 
@@ -69,12 +71,12 @@ impl<'tape> Dumper<'tape> {
 
 #[derive(Default)]
 pub(crate) struct DebugInfo {
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     instructions: Vec<DebugInstruction>,
 }
 
 impl DebugInfo {
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     pub(crate) unsafe fn push<'tape, I>(&mut self, offset: usize)
     where
         I: Dump<'tape>,
@@ -99,7 +101,7 @@ impl<'tape> Dump<'tape> for DebugInfo {
     fn dump(
         &self,
         fmt: &mut fmt::Formatter,
-        #[cfg_attr(not(feature = "std"), allow(unused_variables))] dumper: Dumper<'tape>,
+        #[cfg_attr(not(feature = "alloc"), allow(unused_variables))] dumper: Dumper<'tape>,
     ) -> fmt::Result {
         impl<'tape> Dump<'tape> for DebugInstruction {
             fn dump(&self, fmt: &mut fmt::Formatter, dumper: Dumper<'tape>) -> fmt::Result {
@@ -117,11 +119,11 @@ impl<'tape> Dump<'tape> for DebugInfo {
         }
 
         let mut tuple = fmt.debug_tuple("Tape");
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         for instruction in &self.instructions {
             tuple.field(&format_args!("{:?}", &dumper.debug(instruction)));
         }
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         tuple.field(&(..));
         tuple.finish()
     }

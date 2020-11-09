@@ -11,9 +11,9 @@ test = false
 [dependencies]
 
 [features]
-std = []
+alloc = []
 
 [[example]]
 name = "say-it-thrice"
 path = "examples/say-it-thrice.rs"
-required-features = ["std"]
+required-features = ["alloc"]

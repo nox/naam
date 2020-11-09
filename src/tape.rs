@@ -3,6 +3,8 @@
 //! `Vec<MaybeUninit<usize>>` implements both `AsClearedWriter` and `Writer`
 //! when the `std` feature is enabled.
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 use core::mem::MaybeUninit;
 
 /// Types from which a cleared writer can be obtained.
@@ -35,7 +37,7 @@ pub unsafe trait Writer {
 #[derive(Clone, Copy, Debug)]
 pub struct UnexpectedEndError;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 unsafe impl AsClearedWriter for Vec<MaybeUninit<usize>> {
     #[inline(always)]
     fn as_cleared_writer(&mut self) -> &mut dyn Writer {
@@ -44,7 +46,7 @@ unsafe impl AsClearedWriter for Vec<MaybeUninit<usize>> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 unsafe impl<'tape> Writer for Vec<MaybeUninit<usize>> {
     #[inline(always)]
     fn word_offset(&self) -> usize {
