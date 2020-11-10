@@ -10,6 +10,20 @@ use core::marker::PhantomData as marker;
 use core::mem;
 use core::ptr;
 
+pub trait Build<Cpu, Ram>
+where
+    Ram: ?Sized,
+{
+    type Error: From<UnexpectedEndError>;
+
+    fn build<'tape, 'code>(
+        &'code self,
+        builder: &mut Builder<'tape, 'code, Cpu, Ram>,
+    ) -> Result<(), Self::Error>
+    where
+        'code: 'tape;
+}
+
 /// A program builder. Passed to the closure given to `Machine::program`.
 pub struct Builder<'tape, 'rom, Cpu, Ram>
 where

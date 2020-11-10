@@ -2,13 +2,11 @@
 
 extern crate naam;
 
-use naam::builder::Builder;
+use naam::builder::{Build, Builder};
 use naam::builtins::Nop;
-use naam::code::Build;
 use naam::cpu::DirectThreadedLoop as Cpu;
-use naam::program::Program;
 use naam::tape::UnexpectedEndError;
-use naam::{Destination, Execute, Offset, Pc, Runner};
+use naam::{Destination, Execute, Offset, Pc, Program, Runner};
 use std::fmt::Debug;
 
 fn main() {
