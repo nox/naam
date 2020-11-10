@@ -25,7 +25,8 @@ fn main() {
 #[derive(Debug)]
 struct SayItNTimes<'a>(&'a str);
 
-impl<'a> Build<Cpu, SayItNTimesRam> for SayItNTimes<'a> {
+impl<'a> Build<Cpu> for SayItNTimes<'a> {
+    type Ram = SayItNTimesRam;
     type Error = UnexpectedEndError;
 
     fn build<'tape, 'code>(
@@ -72,11 +73,7 @@ where
     Ram: ?Sized,
 {
     #[inline(always)]
-    fn execute(
-        pc: Pc<'tape, Self>,
-        _runner: Runner<'tape>,
-        _ram: &mut Ram,
-    ) -> Destination<'tape> {
+    fn execute(pc: Pc<'tape, Self>, _runner: Runner<'tape>, _ram: &mut Ram) -> Destination<'tape> {
         println!("{}", pc.0);
         Ok(pc.next())
     }

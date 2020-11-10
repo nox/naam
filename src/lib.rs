@@ -30,34 +30,27 @@ use core::ops::Deref;
 use stable_deref_trait::StableDeref;
 
 /// A compiled program.
-pub struct Program<Cpu, Tape, Code, Ram>
-where
-    Ram: ?Sized,
-{
+pub struct Program<Cpu, Tape, Code> {
     cpu: Cpu,
     tape: Tape,
     debug_info: DebugInfo,
     code: Code,
     not_sync: marker<*mut ()>,
-    marker: marker<fn(&mut Ram)>,
 }
 
-impl<Cpu, Tape, Code, Ram> Program<Cpu, Tape, Code, Ram>
+impl<Cpu, Tape, Code> Program<Cpu, Tape, Code>
 where
-    Ram: ?Sized,
+    Cpu: for<'ram> Dispatch<<<Code as Deref>::Target as Build<Cpu>>::Ram>,
+    Tape: AsClearedWriter,
+    Code: StableDeref,
+    <Code as Deref>::Target: Build<Cpu>,
 {
     /// Returns a new program built from the given code.
     pub fn new(
         cpu: Cpu,
         mut tape: Tape,
         code: Code,
-    ) -> Result<Program<Cpu, Tape, Code, Ram>, <<Code as Deref>::Target as Build<Cpu, Ram>>::Error>
-    where
-        Cpu: Dispatch<Ram>,
-        Tape: AsClearedWriter,
-        Code: StableDeref,
-        <Code as Deref>::Target: Build<Cpu, Ram>,
-    {
+    ) -> Result<Program<Cpu, Tape, Code>, <<Code as Deref>::Target as Build<Cpu>>::Error> {
         let mut builder = Builder::new(cpu, &mut tape);
         code.deref().build(&mut builder)?;
         builder.emit(Unreachable)?;
@@ -69,17 +62,12 @@ where
                 debug_info,
                 code,
                 not_sync: marker,
-                marker,
             })
         }
     }
 
-    /// Runs the program in a given environment.
-    pub fn run(&self, ram: &mut Ram)
-    where
-        Cpu: Dispatch<Ram>,
-        Tape: AsRef<[MaybeUninit<usize>]>,
-    {
+    /// Runs the program with some RAM.
+    pub fn run(&self, ram: &mut <<Code as Deref>::Target as Build<Cpu>>::Ram) {
         let tape = self.tape.as_ref();
         unsafe {
             let runner = Runner::new(tape);
@@ -98,10 +86,10 @@ where
     }
 }
 
-impl<Cpu, Tape, Ram, Env> fmt::Debug for Program<Cpu, Tape, Ram, Env>
+impl<Cpu, Tape, Code> fmt::Debug for Program<Cpu, Tape, Code>
 where
     Cpu: Debug,
-    Ram: Debug,
+    Code: Debug,
     Tape: AsRef<[MaybeUninit<usize>]>,
 {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {

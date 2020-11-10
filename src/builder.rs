@@ -10,15 +10,13 @@ use core::marker::PhantomData as marker;
 use core::mem;
 use core::ptr;
 
-pub trait Build<Cpu, Ram>
-where
-    Ram: ?Sized,
-{
+pub trait Build<Cpu> {
+    type Ram: ?Sized;
     type Error: From<UnexpectedEndError>;
 
     fn build<'tape, 'code>(
         &'code self,
-        builder: &mut Builder<'tape, 'code, Cpu, Ram>,
+        builder: &mut Builder<'tape, 'code, Cpu, Self::Ram>,
     ) -> Result<(), Self::Error>
     where
         'code: 'tape;
