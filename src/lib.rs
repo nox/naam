@@ -17,62 +17,14 @@ mod id;
 pub mod program;
 pub mod tape;
 
-use crate::builder::{Builder, Instruction};
-use crate::builtins::Unreachable;
-use crate::code::Build;
-use crate::cpu::{Addr, Dispatch, Halt};
+use crate::builder::Instruction;
+use crate::cpu::{Addr, Halt};
 use crate::debug_info::Dump;
 use crate::id::Id;
-use crate::program::Program;
-use crate::tape::AsClearedWriter;
 
 use core::fmt::{self, Debug};
 use core::mem::{self, MaybeUninit};
 use core::ops::Deref;
-use stable_deref_trait::StableDeref;
-
-/// A machine for which programs can be built.
-///
-/// A machine is a CPU, a tape on which to write the program, and some RAM.
-/// Obviously all of those are virtual here, as our goal is to make high-level
-/// virtual machines.
-#[derive(Clone, Copy, Debug)]
-pub struct Machine<Cpu, Tape> {
-    cpu: Cpu,
-    tape: Tape,
-}
-
-impl<Cpu, Tape> Machine<Cpu, Tape>
-where
-    Tape: AsClearedWriter,
-{
-    /// Returns a new machine, given a CPU and a tape.
-    ///
-    /// This is the entry point to all of NAAM.
-    #[inline(always)]
-    pub fn new(cpu: Cpu, tape: Tape) -> Self {
-        Self { cpu, tape }
-    }
-
-    /// Returns a new program built from the given code.
-    pub fn program<Code, Env>(
-        mut self,
-        code: Code,
-    ) -> Result<Program<Cpu, Tape, Code, Env>, <<Code as Deref>::Target as Build<Cpu, Env>>::Error>
-    where
-        Cpu: Dispatch<Env>,
-        Code: StableDeref,
-        <Code as Deref>::Target: Build<Cpu, Env>,
-    {
-        let mut builder = Builder::new(self.cpu, &mut self.tape);
-        code.deref().build(&mut builder)?;
-        builder.emit(Unreachable)?;
-        unsafe {
-            let debug_info = builder.into_debug_info();
-            Ok(Program::new(self.cpu, self.tape, debug_info, code))
-        }
-    }
-}
 
 /// How to execute an operation, the main piece of code for end users.
 pub trait Execute<'tape, Ram>: 'tape + Copy + Dump<'tape> + Sized

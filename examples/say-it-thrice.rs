@@ -6,17 +6,15 @@ use naam::builder::Builder;
 use naam::builtins::Nop;
 use naam::code::Build;
 use naam::cpu::DirectThreadedLoop as Cpu;
+use naam::program::Program;
 use naam::tape::UnexpectedEndError;
-use naam::{Destination, Execute, Machine, Offset, Pc, Runner};
+use naam::{Destination, Execute, Offset, Pc, Runner};
 use std::fmt::Debug;
 
 fn main() {
-    let machine = Machine::new(Cpu, vec![]);
     let hello = "Hello, world!".to_owned();
     let code = SayItNTimes(&hello);
-    let mut program = machine
-        .program(&code)
-        .unwrap();
+    let program = Program::new(Cpu, vec![], &code).unwrap();
     println!("{:#?}\n", program);
     let mut ram = SayItNTimesRam {
         rval: 0,

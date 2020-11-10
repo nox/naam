@@ -1,7 +1,10 @@
 use crate::builder::Builder;
 use crate::tape::UnexpectedEndError;
 
-pub trait Build<Cpu, Ram> {
+pub trait Build<Cpu, Ram>
+where
+    Ram: ?Sized,
+{
     type Error: From<UnexpectedEndError>;
 
     fn build<'tape, 'code>(
