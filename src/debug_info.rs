@@ -39,7 +39,10 @@ impl<'tape> Dumper<'tape> {
 /// A bridge to use dumpable values in `Debug`.
 pub struct DumpDebugBridge<'a, 'tape, T>(&'a T, Dumper<'tape>);
 
-impl<'tape, T: Dump<'tape>> Debug for DumpDebugBridge<'_, 'tape, T> {
+impl<'tape, T> Debug for DumpDebugBridge<'_, 'tape, T>
+where
+    T: Dump<'tape>,
+{
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         self.0.dump(fmt, self.1)
     }
@@ -56,7 +59,7 @@ impl<'tape> Dump<'tape> for Offset<'tape> {
     }
 }
 
-impl<'tape> Dumper<'tape> {
+impl Dumper<'_> {
     pub(crate) unsafe fn new(code: &[MaybeUninit<usize>]) -> Self {
         Self {
             tape: code.as_ptr(),

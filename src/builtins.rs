@@ -7,17 +7,12 @@ use crate::{Destination, Execute, Pc, Runner};
 #[derive(Clone, Copy, Debug)]
 pub struct Nop;
 
-impl<'tape, Ram, Env> Execute<'tape, Ram, Env> for Nop
+impl<'tape, Ram> Execute<'tape, Ram> for Nop
 where
-    Env: ?Sized,
+    Ram: ?Sized,
 {
     #[inline(always)]
-    fn execute(
-        pc: Pc<'tape, Self>,
-        _runner: Runner<'tape, Ram, Env>,
-        _ram: &mut Ram,
-        _env: &mut Env,
-    ) -> Destination<'tape> {
+    fn execute(pc: Pc<'tape, Self>, _runner: Runner<'tape>, _ram: &mut Ram) -> Destination<'tape> {
         Ok(pc.next())
     }
 }
@@ -26,17 +21,12 @@ where
 #[derive(Clone, Copy, Debug)]
 pub struct Unreachable;
 
-impl<'tape, Ram, Env> Execute<'tape, Ram, Env> for Unreachable
+impl<'tape, Ram> Execute<'tape, Ram> for Unreachable
 where
-    Env: ?Sized,
+    Ram: ?Sized,
 {
     #[inline(always)]
-    fn execute(
-        _pc: Pc<'tape, Self>,
-        _runner: Runner<'tape, Ram, Env>,
-        _ram: &mut Ram,
-        _env: &mut Env,
-    ) -> Destination<'tape> {
+    fn execute(_pc: Pc<'tape, Self>, _runner: Runner<'tape>, _ram: &mut Ram) -> Destination<'tape> {
         panic!("reached unreachable tape")
     }
 }

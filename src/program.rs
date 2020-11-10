@@ -8,26 +8,26 @@ use core::marker::PhantomData as marker;
 use core::mem::MaybeUninit;
 
 /// A compiled program.
-pub struct Program<Cpu, Tape, Ram, Env>
+pub struct Program<Cpu, Tape, Rom, Ram>
 where
-    Env: ?Sized,
+    Ram: ?Sized,
 {
     cpu: Cpu,
     tape: Tape,
     debug_info: DebugInfo,
-    ram: Ram,
+    rom: Rom,
     not_sync: marker<*mut ()>,
-    marker: marker<fn(&mut Ram, &mut Env)>,
+    marker: marker<fn(&mut Ram)>,
 }
 
-impl<Cpu, Tape, Ram, Env> Program<Cpu, Tape, Ram, Env>
+impl<Cpu, Tape, Rom, Ram> Program<Cpu, Tape, Rom, Ram>
 where
-    Env: ?Sized,
+    Ram: ?Sized,
 {
     /// Runs the program in a given environment.
-    pub fn run(&mut self, env: &mut Env)
+    pub fn run(&mut self, ram: &mut Ram)
     where
-        Cpu: Dispatch<Ram, Env>,
+        Cpu: Dispatch<Ram>,
         Tape: AsRef<[MaybeUninit<usize>]>,
     {
         let tape = self.tape.as_ref();
@@ -37,29 +37,23 @@ where
                 token: &*(tape.as_ptr() as *const _),
                 id: runner.id,
             };
-            self.cpu.dispatch(addr, runner, &mut self.ram, env)
+            self.cpu.dispatch(addr, runner, ram)
         }
     }
 
-    /// Gets a reference to the RAM used by the program.
+    /// Gets a reference to the ROM used by the program.
     #[inline(always)]
-    pub fn ram(&self) -> &Ram {
-        &self.ram
-    }
-
-    /// Gets a mutable reference to the RAM used by the program.
-    #[inline(always)]
-    pub fn env_mut(&mut self) -> &mut Ram {
-        &mut self.ram
+    pub fn rom(&self) -> &Rom {
+        &self.rom
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn new(cpu: Cpu, tape: Tape, debug_info: DebugInfo, ram: Ram) -> Self {
+    pub(crate) unsafe fn new(cpu: Cpu, tape: Tape, debug_info: DebugInfo, rom: Rom) -> Self {
         Self {
             cpu,
             tape,
             debug_info,
-            ram,
+            rom,
             not_sync: marker,
             marker,
         }
@@ -77,7 +71,7 @@ where
         fmt.debug_struct("Machine")
             .field("cpu", &self.cpu)
             .field("tape", &dumper.debug(&self.debug_info))
-            .field("ram", &self.ram)
+            .field("rom", &self.rom)
             .finish()
     }
 }

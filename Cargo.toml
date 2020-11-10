@@ -9,9 +9,10 @@ license = "Apache-2.0 OR MIT"
 test = false
 
 [dependencies]
+stable_deref_trait = {version = "1.2", default-features = false}
 
 [features]
-alloc = []
+alloc = ["stable_deref_trait/alloc"]
 
 [[example]]
 name = "say-it-thrice"

@@ -10,6 +10,7 @@ extern crate alloc;
 
 pub mod builder;
 pub mod builtins;
+pub mod code;
 pub mod cpu;
 pub mod debug_info;
 mod id;
@@ -18,16 +19,17 @@ pub mod tape;
 
 use crate::builder::{Builder, Instruction};
 use crate::builtins::Unreachable;
+use crate::code::Build;
 use crate::cpu::{Addr, Dispatch, Halt};
 use crate::debug_info::Dump;
 use crate::id::Id;
 use crate::program::Program;
-use crate::tape::{AsClearedWriter, UnexpectedEndError};
+use crate::tape::AsClearedWriter;
 
 use core::fmt::{self, Debug};
-use core::marker::PhantomData as marker;
 use core::mem::{self, MaybeUninit};
 use core::ops::Deref;
+use stable_deref_trait::StableDeref;
 
 /// A machine for which programs can be built.
 ///
@@ -35,49 +37,47 @@ use core::ops::Deref;
 /// Obviously all of those are virtual here, as our goal is to make high-level
 /// virtual machines.
 #[derive(Clone, Copy, Debug)]
-pub struct Machine<Cpu, Tape, Ram> {
+pub struct Machine<Cpu, Tape> {
     cpu: Cpu,
     tape: Tape,
-    ram: Ram,
 }
 
-impl<Cpu, Tape, Ram> Machine<Cpu, Tape, Ram>
+impl<Cpu, Tape> Machine<Cpu, Tape>
 where
     Tape: AsClearedWriter,
 {
-    /// Returns a new machine, given a CPU, a tape and some RAM.
+    /// Returns a new machine, given a CPU and a tape.
     ///
     /// This is the entry point to all of NAAM.
     #[inline(always)]
-    pub fn new(cpu: Cpu, tape: Tape, ram: Ram) -> Self {
-        Self { cpu, tape, ram }
+    pub fn new(cpu: Cpu, tape: Tape) -> Self {
+        Self { cpu, tape }
     }
 
-    /// Consumes the machine and returns a new program.
-    ///
-    /// The program's instructions cannot borrow from the RAM.
-    pub fn program<Env, Error>(
+    /// Returns a new program built from the given code.
+    pub fn program<Code, Env>(
         mut self,
-        build: impl FnOnce(&mut Builder<'_, Cpu, Ram, Env>, &mut Ram) -> Result<(), Error>,
-    ) -> Result<Program<Cpu, Tape, Ram, Env>, Error>
+        code: Code,
+    ) -> Result<Program<Cpu, Tape, Code, Env>, <<Code as Deref>::Target as Build<Cpu, Env>>::Error>
     where
-        Cpu: Dispatch<Ram, Env>,
-        Error: From<UnexpectedEndError>,
+        Cpu: Dispatch<Env>,
+        Code: StableDeref,
+        <Code as Deref>::Target: Build<Cpu, Env>,
     {
         let mut builder = Builder::new(self.cpu, &mut self.tape);
-        build(&mut builder, &mut self.ram)?;
+        code.deref().build(&mut builder)?;
         builder.emit(Unreachable)?;
         unsafe {
             let debug_info = builder.into_debug_info();
-            Ok(Program::new(self.cpu, self.tape, debug_info, self.ram))
+            Ok(Program::new(self.cpu, self.tape, debug_info, code))
         }
     }
 }
 
 /// How to execute an operation, the main piece of code for end users.
-pub trait Execute<'tape, Ram, Env>: 'tape + Copy + Dump<'tape> + Sized
+pub trait Execute<'tape, Ram>: 'tape + Copy + Dump<'tape> + Sized
 where
-    Env: ?Sized,
+    Ram: ?Sized,
 {
     /// Executes the operation.
     ///
@@ -90,30 +90,19 @@ where
     /// **Note:** As the CPU is the entity responsible for dispatching
     /// operations and most CPUs wrap calls to that function in a separate
     /// unsafe function, users should probably mark this method as inline.
-    fn execute(
-        pc: Pc<'tape, Self>,
-        runner: Runner<'tape, Ram, Env>,
-        ram: &mut Ram,
-        env: &mut Env,
-    ) -> Destination<'tape>;
+    fn execute(pc: Pc<'tape, Self>, runner: Runner<'tape>, ram: &mut Ram) -> Destination<'tape>;
 }
 
 /// The runner, which allows resolving tape offsets during execution.
-pub struct Runner<'tape, Ram, Env>
-where
-    Env: ?Sized,
-{
+#[derive(Clone, Copy)]
+pub struct Runner<'tape> {
     tape: *const u8,
     #[cfg(debug_assertions)]
     len: usize,
-    marker: marker<fn(&mut Ram, &mut Env)>,
     id: Id<'tape>,
 }
 
-impl<'tape, Ram, Env> Runner<'tape, Ram, Env>
-where
-    Env: ?Sized,
-{
+impl<'tape> Runner<'tape> {
     /// Resolves a tape offset to a physical address.
     #[inline(always)]
     pub fn resolve_offset(self, offset: Offset<'tape>) -> Addr<'tape> {
@@ -140,23 +129,10 @@ where
             tape: tape.as_ptr() as *const u8,
             #[cfg(debug_assertions)]
             len: tape.len().wrapping_mul(mem::size_of::<usize>()),
-            marker,
             id: Id::default(),
         }
     }
 }
-
-impl<'tape, Ram, Env> Clone for Runner<'tape, Ram, Env>
-where
-    Env: ?Sized,
-{
-    #[inline(always)]
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<'tape, Ram, Env> Copy for Runner<'tape, Ram, Env> where Env: ?Sized {}
 
 /// The program counter.
 ///

@@ -2,56 +2,84 @@
 
 extern crate naam;
 
+use naam::builder::Builder;
 use naam::builtins::Nop;
+use naam::code::Build;
 use naam::cpu::DirectThreadedLoop as Cpu;
+use naam::tape::UnexpectedEndError;
 use naam::{Destination, Execute, Machine, Offset, Pc, Runner};
 use std::fmt::Debug;
 
 fn main() {
-    let machine = Machine::new(Cpu, vec![], 0);
+    let machine = Machine::new(Cpu, vec![]);
+    let hello = "Hello, world!".to_owned();
+    let code = SayItNTimes(&hello);
     let mut program = machine
-        .program(|builder, _env| {
-            builder.emit(Nop)?;
-            let print_hello_world = builder.offset();
-            builder.emit(PrintLn("Hello, world!"))?;
-            builder.emit(JumpNTimes(print_hello_world))?;
-            builder.emit(Return(42))
-        })
+        .program(&code)
         .unwrap();
     println!("{:#?}\n", program);
-    program.run(&mut 2);
-    assert!(*program.ram() == 42);
+    let mut ram = SayItNTimesRam {
+        rval: 0,
+        counter: 2,
+    };
+    program.run(&mut ram);
+    assert!(ram.rval == 42);
+}
+
+#[derive(Debug)]
+struct SayItNTimes<'a>(&'a str);
+
+impl<'a> Build<Cpu, SayItNTimesRam> for SayItNTimes<'a> {
+    type Error = UnexpectedEndError;
+
+    fn build<'tape, 'code>(
+        &'code self,
+        builder: &mut Builder<'tape, 'code, Cpu, SayItNTimesRam>,
+    ) -> Result<(), Self::Error>
+    where
+        'code: 'tape,
+    {
+        builder.emit(Nop)?;
+        let print_hello_world = builder.offset();
+        builder.emit(PrintLn(self.0))?;
+        builder.emit(JumpNTimes(print_hello_world))?;
+        builder.emit(Return(42))
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
-struct Return<Out>(Out);
+struct SayItNTimesRam {
+    rval: usize,
+    counter: usize,
+}
 
-impl<'tape, Env, Out> Execute<'tape, Out, Env> for Return<Out>
-where
-    Out: 'tape + Copy + Debug,
-{
+#[derive(Clone, Copy, Debug)]
+struct Return(usize);
+
+impl<'tape> Execute<'tape, SayItNTimesRam> for Return {
     fn execute(
         pc: Pc<'tape, Self>,
-        runner: Runner<'tape, Out, Env>,
-        ram: &mut Out,
-        _env: &mut Env,
+        runner: Runner<'tape>,
+        ram: &mut SayItNTimesRam,
     ) -> Destination<'tape> {
-        *ram = pc.0;
+        ram.rval = pc.0;
         Err(runner.halt())
     }
 }
 
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
-struct PrintLn(&'static str);
+struct PrintLn<'rom>(&'rom str);
 
-impl<'tape, Ram, Env> Execute<'tape, Ram, Env> for PrintLn {
+impl<'tape, 'rom: 'tape, Ram> Execute<'tape, Ram> for PrintLn<'rom>
+where
+    Ram: ?Sized,
+{
     #[inline(always)]
     fn execute(
         pc: Pc<'tape, Self>,
-        _runner: Runner<'tape, Ram, Env>,
+        _runner: Runner<'tape>,
         _ram: &mut Ram,
-        _env: &mut Env,
     ) -> Destination<'tape> {
         println!("{}", pc.0);
         Ok(pc.next())
@@ -62,15 +90,14 @@ impl<'tape, Ram, Env> Execute<'tape, Ram, Env> for PrintLn {
 #[repr(transparent)]
 struct JumpNTimes<'tape>(Offset<'tape>);
 
-impl<'tape, Ram> Execute<'tape, Ram, usize> for JumpNTimes<'tape> {
+impl<'tape, 'rom> Execute<'tape, SayItNTimesRam> for JumpNTimes<'tape> {
     fn execute(
         pc: Pc<'tape, Self>,
-        runner: Runner<'tape, Ram, usize>,
-        _ram: &mut Ram,
-        env: &mut usize,
+        runner: Runner<'tape>,
+        ram: &mut SayItNTimesRam,
     ) -> Destination<'tape> {
-        Ok(if *env > 0 {
-            *env -= 1;
+        Ok(if ram.counter > 0 {
+            ram.counter -= 1;
             runner.resolve_offset(pc.0)
         } else {
             pc.next()
@@ -80,21 +107,16 @@ impl<'tape, Ram> Execute<'tape, Ram, usize> for JumpNTimes<'tape> {
 
 mod should_be_derived {
     use super::*;
-    use core::any;
     use core::fmt::{self, Debug};
     use naam::debug_info::{Dump, Dumper};
 
-    impl<'tape, Out> Dump<'tape> for Return<Out>
-    where
-        Out: Debug,
-    {
+    impl<'tape> Dump<'tape> for Return {
         fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
-            write!(fmt, "Return<{}", any::type_name::<Out>())?;
-            fmt.debug_tuple(">").field(&self.0).finish()
+            self.fmt(fmt)
         }
     }
 
-    impl<'tape> Dump<'tape> for PrintLn {
+    impl<'tape> Dump<'tape> for PrintLn<'_> {
         fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
             self.fmt(fmt)
         }

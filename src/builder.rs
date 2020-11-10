@@ -11,22 +11,22 @@ use core::mem;
 use core::ptr;
 
 /// A program builder. Passed to the closure given to `Machine::program`.
-pub struct Builder<'tape, Cpu, Ram, Env>
+pub struct Builder<'tape, 'rom, Cpu, Ram>
 where
-    Env: ?Sized,
+    Ram: ?Sized,
 {
     cpu: Cpu,
     writer: &'tape mut dyn Writer,
     debug_info: DebugInfo,
     #[allow(dead_code)]
     id: Id<'tape>,
-    marker: marker<fn(&mut Ram, &mut Env)>,
+    marker: marker<(&'rom (), fn(&mut Ram))>,
 }
 
-impl<'tape, Cpu, Ram, Env> Builder<'tape, Cpu, Ram, Env>
+impl<'tape, 'rom, Cpu, Ram> Builder<'tape, 'rom, Cpu, Ram>
 where
-    Cpu: Dispatch<Ram, Env>,
-    Env: ?Sized,
+    Cpu: Dispatch<Ram>,
+    Ram: ?Sized,
 {
     /// Emits an operation, which must be supported by the builder's CPU.
     ///
@@ -35,12 +35,11 @@ where
     /// This method panics if `Op`'s alignment exceeds `usize`'s.
     pub fn emit<Op>(&mut self, op: Op) -> Result<(), UnexpectedEndError>
     where
-        Cpu: GetDispatchToken<'tape, Op, Ram, Env>,
-        Op: Execute<'tape, Ram, Env>,
-        Env: 'tape,
+        Cpu: GetDispatchToken<'tape, Op, Ram>,
+        Op: Execute<'tape, Ram>,
     {
         let instruction = Instruction {
-            token: <Cpu as GetDispatchToken<Op, Ram, Env>>::get_dispatch_token(self.cpu),
+            token: <Cpu as GetDispatchToken<Op, Ram>>::get_dispatch_token(self.cpu),
             op,
         };
 
