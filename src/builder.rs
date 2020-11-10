@@ -25,7 +25,7 @@ where
 }
 
 /// A program builder. Passed to the closure given to `Machine::program`.
-pub struct Builder<'tape, 'rom, Cpu, Ram>
+pub struct Builder<'tape, 'code, Cpu, Ram>
 where
     Ram: ?Sized,
 {
@@ -34,10 +34,10 @@ where
     debug_info: DebugInfo,
     #[allow(dead_code)]
     id: Id<'tape>,
-    marker: marker<(&'rom (), fn(&mut Ram))>,
+    marker: marker<(&'code (), fn(&mut Ram))>,
 }
 
-impl<'tape, 'rom, Cpu, Ram> Builder<'tape, 'rom, Cpu, Ram>
+impl<'tape, 'code, Cpu, Ram> Builder<'tape, 'code, Cpu, Ram>
 where
     Cpu: Dispatch<Ram>,
     Ram: ?Sized,
@@ -49,6 +49,7 @@ where
     /// This method panics if `Op`'s alignment exceeds `usize`'s.
     pub fn emit<Op>(&mut self, op: Op) -> Result<(), UnexpectedEndError>
     where
+        'code: 'tape,
         Cpu: GetDispatchToken<'tape, Op, Ram>,
         Op: Execute<'tape, Ram>,
     {

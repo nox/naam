@@ -65,9 +65,9 @@ impl<'tape> Execute<'tape, SayItNTimesRam> for Return {
 
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
-struct PrintLn<'rom>(&'rom str);
+struct PrintLn<'code>(&'code str);
 
-impl<'tape, 'rom: 'tape, Ram> Execute<'tape, Ram> for PrintLn<'rom>
+impl<'tape, 'code: 'tape, Ram> Execute<'tape, Ram> for PrintLn<'code>
 where
     Ram: ?Sized,
 {
@@ -86,7 +86,7 @@ where
 #[repr(transparent)]
 struct JumpNTimes<'tape>(Offset<'tape>);
 
-impl<'tape, 'rom> Execute<'tape, SayItNTimesRam> for JumpNTimes<'tape> {
+impl<'tape, 'code> Execute<'tape, SayItNTimesRam> for JumpNTimes<'tape> {
     fn execute(
         pc: Pc<'tape, Self>,
         runner: Runner<'tape>,
