@@ -5,7 +5,7 @@ use syn::visit;
 use syn::{Fields, Lifetime};
 use synstructure::{BindingInfo, Structure};
 
-pub(crate) fn derive(s: Structure) -> TokenStream {
+pub(crate) fn derive(mut s: Structure) -> TokenStream {
     let tape_lt = s
         .ast()
         .generics
@@ -71,10 +71,7 @@ pub(crate) fn derive(s: Structure) -> TokenStream {
         quote! { match *self { #(#match_arms)* } }
     };
 
-    s.gen_impl(quote! {
-        extern crate core;
-        extern crate naam;
-
+    s.underscore_const(true).gen_impl(quote! {
         gen impl<#generated_tape_lt> naam::debug_info::Dump<#tape_lt> for @Self {
             fn dump(
                 &self,

@@ -1,10 +1,14 @@
 //! Built-in operations.
 
+use crate::debug_info::Dump;
 use crate::{Destination, Execute, Pc, Runner};
+
+// Hack so that #[derive(Dump)] works in naam itself.
+use crate as naam;
 
 /// The classic “nop” operation, which does nothing and just continues with
 /// the next operation on tape.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Dump)]
 pub struct Nop;
 
 impl<'tape, Ram> Execute<'tape, Ram> for Nop
@@ -18,7 +22,7 @@ where
 }
 
 /// The unreachable operation, which always panic.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Dump)]
 pub struct Unreachable;
 
 impl<'tape, Ram> Execute<'tape, Ram> for Unreachable
@@ -28,25 +32,5 @@ where
     #[inline(always)]
     fn execute(_pc: Pc<'tape, Self>, _runner: Runner<'tape>, _ram: &mut Ram) -> Destination<'tape> {
         panic!("reached unreachable tape")
-    }
-}
-
-mod should_be_derived {
-    use super::*;
-
-    use crate::debug_info::{Dump, Dumper};
-
-    use core::fmt;
-
-    impl<'tape> Dump<'tape> for Nop {
-        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
-            fmt::Debug::fmt(self, fmt)
-        }
-    }
-
-    impl<'tape> Dump<'tape> for Unreachable {
-        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
-            fmt::Debug::fmt(self, fmt)
-        }
     }
 }
