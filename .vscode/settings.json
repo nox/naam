@@ -1,7 +1,8 @@
 {
     "rust-analyzer.cargo.features": [
         "alloc",
+        "macros",
     ],
-    "rust-analyzer.assist.importMergeBehaviour": "none",
-    "rust-analyzer.assist.importPrefix": "by_crate"
+    "rust-analyzer.assist.importMergeBehaviour": "last",
+    "rust-analyzer.assist.importPrefix": "by_crate",
 }

@@ -5,6 +5,7 @@ extern crate naam;
 use naam::builder::{Build, Builder};
 use naam::builtins::Nop;
 use naam::cpu::DirectThreadedLoop as Cpu;
+use naam::debug_info::Dump;
 use naam::tape::UnexpectedEndError;
 use naam::{Destination, Execute, Offset, Pc, Program, Runner};
 use std::fmt::Debug;
@@ -50,7 +51,7 @@ struct SayItNTimesRam {
     counter: usize,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Dump)]
 struct Return(usize);
 
 impl<'tape> Execute<'tape, SayItNTimesRam> for Return {
@@ -64,7 +65,7 @@ impl<'tape> Execute<'tape, SayItNTimesRam> for Return {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Dump)]
 #[repr(transparent)]
 struct PrintLn<'code>(&'code str);
 
@@ -79,7 +80,7 @@ where
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Dump)]
 #[repr(transparent)]
 struct JumpNTimes<'tape>(Offset<'tape>);
 
@@ -95,31 +96,5 @@ impl<'tape, 'code> Execute<'tape, SayItNTimesRam> for JumpNTimes<'tape> {
         } else {
             pc.next()
         })
-    }
-}
-
-mod should_be_derived {
-    use super::*;
-    use core::fmt::{self, Debug};
-    use naam::debug_info::{Dump, Dumper};
-
-    impl<'tape> Dump<'tape> for Return {
-        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
-            self.fmt(fmt)
-        }
-    }
-
-    impl<'tape> Dump<'tape> for PrintLn<'_> {
-        fn dump(&self, fmt: &mut fmt::Formatter, _dumper: Dumper<'tape>) -> fmt::Result {
-            self.fmt(fmt)
-        }
-    }
-
-    impl<'tape> Dump<'tape> for JumpNTimes<'tape> {
-        fn dump(&self, fmt: &mut fmt::Formatter, dumper: Dumper<'tape>) -> fmt::Result {
-            fmt.debug_tuple("JumpNTimes")
-                .field(&dumper.debug(&self.0))
-                .finish()
-        }
     }
 }

@@ -9,12 +9,19 @@ license = "Apache-2.0 OR MIT"
 test = false
 
 [dependencies]
+naam_macros = {version = "0.1", path = "macros", optional = true}
 stable_deref_trait = {version = "1.2", default-features = false}
 
 [features]
 alloc = ["stable_deref_trait/alloc"]
+macros = ["naam_macros"]
 
 [[example]]
 name = "say-it-thrice"
 path = "examples/say-it-thrice.rs"
-required-features = ["alloc"]
+required-features = ["alloc", "macros"]
+
+[workspace]
+members = [
+    "macros",
+]

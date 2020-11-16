@@ -18,8 +18,7 @@ pub mod tape;
 use crate::builder::{Build, Builder, Instruction};
 use crate::builtins::Unreachable;
 use crate::cpu::{Addr, Dispatch, Halt};
-use crate::debug_info::Dumper;
-use crate::debug_info::{DebugInfo, Dump};
+use crate::debug_info::{DebugInfo, Dump, Dumper};
 use crate::id::Id;
 use crate::tape::AsClearedWriter;
 
@@ -52,7 +51,7 @@ where
         code: Code,
     ) -> Result<Program<Cpu, Tape, Code>, <<Code as Deref>::Target as Build<Cpu>>::Error> {
         let mut builder = Builder::new(cpu, &mut tape);
-        code.deref().build(&mut builder)?;
+        code.build(&mut builder)?;
         builder.emit(Unreachable)?;
         unsafe {
             let debug_info = builder.into_debug_info();

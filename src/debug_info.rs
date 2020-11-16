@@ -8,6 +8,9 @@ use alloc::vec::Vec;
 use core::fmt::{self, Debug};
 use core::mem::{self, MaybeUninit};
 
+#[cfg(feature = "macros")]
+pub use naam_macros::Dump;
+
 /// Trait for values that can be dumped.
 ///
 /// This is like the `Debug` trait, except it takes a dumper to resolve
